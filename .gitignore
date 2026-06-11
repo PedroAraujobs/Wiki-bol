@@ -1,0 +1,22 @@
+# Backend
+backend/.gradle/
+backend/build/
+backend/logs/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+frontend/*.tsbuildinfo
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
+# IDEs
+.idea/
+.vscode/
+*.iml
+
+# OS
+Thumbs.db
+.DS_Store
