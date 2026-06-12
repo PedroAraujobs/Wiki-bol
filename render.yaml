@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: wiki-bol-api
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: APP_FRONTEND_URL
+        value: https://wiki-bol.testpedrobot.workers.dev
+      - key: SESSION_COOKIE_SECURE
+        value: "true"
+      - key: SUPABASE_DATABASE_URL
+        value: jdbc:postgresql://aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
+      - key: SUPABASE_DATABASE_USERNAME
+        value: postgres.ekmpdqbrldlfpzgnkndi
+      - key: SUPABASE_URL
+        value: https://ekmpdqbrldlfpzgnkndi.supabase.co
+      - key: SUPABASE_STORAGE_BUCKET
+        value: wiki-images
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: SUPABASE_DATABASE_PASSWORD
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false

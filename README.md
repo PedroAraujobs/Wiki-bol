@@ -68,6 +68,31 @@ cd frontend
 npm run build
 ```
 
+## Deploy
+
+O frontend roda em Cloudflare Workers/Pages usando `frontend/wrangler.jsonc`.
+
+O backend roda em Render Free como Web Service Docker usando `render.yaml`:
+
+```text
+Service name: wiki-bol-api
+Runtime: Docker
+Root directory: backend
+Health check path: /api/health
+```
+
+Depois que o Render gerar a URL publica da API, atualize o Cloudflare:
+
+```text
+VITE_API_BASE_URL=https://<render-service>.onrender.com
+```
+
+Cadastre tambem o callback no Google OAuth:
+
+```text
+https://<render-service>.onrender.com/login/oauth2/code/google
+```
+
 ## Autenticacao
 
 O frontend deve chamar a API com cookies:

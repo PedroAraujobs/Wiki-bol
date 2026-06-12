@@ -65,6 +65,7 @@ setx SUPABASE_DATABASE_URL "jdbc:postgresql://aws-1-us-east-1.pooler.supabase.co
 setx SUPABASE_DATABASE_USERNAME "postgres.ekmpdqbrldlfpzgnkndi"
 setx SUPABASE_URL "https://ekmpdqbrldlfpzgnkndi.supabase.co"
 setx SUPABASE_STORAGE_BUCKET "wiki-images"
+setx SESSION_COOKIE_SECURE "false"
 setx SPRING_JPA_SHOW_SQL "true"
 setx SPRING_JPA_FORMAT_SQL "true"
 ```
@@ -94,6 +95,80 @@ Depois do login Google, o backend redireciona para `APP_FRONTEND_URL`. Em desenv
 
 ```text
 http://localhost:5173
+```
+
+Em producao, use a URL publica do frontend, por exemplo:
+
+```powershell
+setx APP_FRONTEND_URL "https://wiki-bol.testpedrobot.workers.dev"
+```
+
+Se o frontend estiver em Cloudflare Pages, configure a publicacao com:
+
+```text
+Root directory: frontend
+Build command: npm ci && npm run build
+Build output directory: dist
+```
+
+Se o painel estiver usando Cloudflare Workers com static assets, configure:
+
+```text
+Root directory: frontend
+Build command: npm ci && npm run build
+Deploy command: npx wrangler deploy
+```
+
+Use `npx wrangler deploy` no campo `Deploy command`. O comando `npx wrangler versions upload` apenas cria uma versao/preview e nao aplica a versao no trafego de producao.
+
+O arquivo `frontend/wrangler.jsonc` aponta o deploy para `./dist` e configura fallback de SPA.
+
+O frontend tambem precisa da URL publica da API em `VITE_API_BASE_URL`. No Cloudflare Pages, isso deve ser uma variavel de ambiente do projeto.
+
+## Deploy no Render Free
+
+O backend pode ser criado no Render a partir do `render.yaml` da raiz do monorepo.
+
+Configuracao esperada:
+
+```text
+Service name: wiki-bol-api
+Runtime: Docker
+Root directory: backend
+Plan: Free
+Health check path: /api/health
+```
+
+Variaveis obrigatorias no Render:
+
+```text
+APP_FRONTEND_URL=https://wiki-bol.testpedrobot.workers.dev
+SESSION_COOKIE_SECURE=true
+GOOGLE_CLIENT_ID=client-id-do-google
+GOOGLE_CLIENT_SECRET=client-secret-do-google
+SUPABASE_DATABASE_PASSWORD=senha-do-banco
+SUPABASE_SERVICE_ROLE_KEY=service-role-key-do-supabase
+```
+
+Variaveis ja descritas no `render.yaml`, mas que podem ser ajustadas se o Supabase mudar:
+
+```text
+SUPABASE_DATABASE_URL=jdbc:postgresql://aws-1-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require
+SUPABASE_DATABASE_USERNAME=postgres.ekmpdqbrldlfpzgnkndi
+SUPABASE_URL=https://ekmpdqbrldlfpzgnkndi.supabase.co
+SUPABASE_STORAGE_BUCKET=wiki-images
+```
+
+Depois que o Render gerar a URL do backend, cadastre no Google OAuth:
+
+```text
+https://<render-service>.onrender.com/login/oauth2/code/google
+```
+
+Atualize tambem o frontend no Cloudflare:
+
+```text
+VITE_API_BASE_URL=https://<render-service>.onrender.com
 ```
 
 ## Como testar
