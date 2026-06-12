@@ -96,6 +96,33 @@ Depois do login Google, o backend redireciona para `APP_FRONTEND_URL`. Em desenv
 http://localhost:5173
 ```
 
+Em producao, use a URL publica do frontend, por exemplo:
+
+```powershell
+setx APP_FRONTEND_URL "https://wiki-bol.testpedrobot.workers.dev"
+```
+
+Se o frontend estiver em Cloudflare Pages, configure a publicacao com:
+
+```text
+Root directory: frontend
+Build command: npm ci && npm run build
+Build output directory: dist
+```
+
+Se o painel estiver usando Cloudflare Workers com static assets, configure:
+
+```text
+Root directory: frontend
+Build command: npm ci && npm run build
+Deploy command: npx wrangler deploy
+Version command: npx wrangler versions upload
+```
+
+O arquivo `frontend/wrangler.jsonc` aponta o deploy para `./dist` e configura fallback de SPA.
+
+O frontend tambem precisa da URL publica da API em `VITE_API_BASE_URL`. No Cloudflare Pages, isso deve ser uma variavel de ambiente do projeto.
+
 ## Como testar
 
 ```powershell

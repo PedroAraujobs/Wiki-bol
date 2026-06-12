@@ -29,6 +29,33 @@ Crie `frontend/.env` se quiser sobrescrever a URL da API:
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
+Em producao, defina `VITE_API_BASE_URL` com a URL publica real da API. Se o frontend estiver em Cloudflare Pages e o backend em outro host, o frontend precisa apontar para o backend publicado, nao para `localhost`.
+
+Para deploy em Cloudflare Pages:
+
+```text
+Root directory: frontend
+Build command: npm ci && npm run build
+Build output directory: dist
+```
+
+Se o projeto estiver configurado no painel como Cloudflare Workers com static assets, use:
+
+```text
+Root directory: frontend
+Build command: npm ci && npm run build
+Deploy command: npx wrangler deploy
+Version command: npx wrangler versions upload
+```
+
+Nesse fluxo, o arquivo `frontend/wrangler.jsonc` publica `./dist` e usa fallback de SPA.
+
+Para rotas do React funcionarem direto no navegador, mantenha o arquivo `frontend/public/_redirects` com:
+
+```text
+/* /index.html 200
+```
+
 Instale dependencias e suba o Vite:
 
 ```powershell
