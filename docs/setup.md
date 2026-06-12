@@ -48,13 +48,7 @@ Deploy command: npx wrangler deploy
 Version command: npx wrangler versions upload
 ```
 
-Nesse fluxo, o arquivo `frontend/wrangler.jsonc` publica `./dist` e usa fallback de SPA.
-
-Para rotas do React funcionarem direto no navegador, mantenha o arquivo `frontend/public/_redirects` com:
-
-```text
-/* /index.html 200
-```
+Nesse fluxo, o arquivo `frontend/wrangler.jsonc` publica `./dist` e usa `not_found_handling: "single-page-application"` para rotas do React. Nao adicione `_redirects` nesse modo, porque o Wrangler valida esse arquivo e pode bloquear o deploy por loop de redirect.
 
 Instale dependencias e suba o Vite:
 
