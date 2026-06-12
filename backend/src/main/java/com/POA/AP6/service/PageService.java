@@ -13,11 +13,13 @@ import com.POA.AP6.observer.PageChangedEvent;
 import com.POA.AP6.repository.PageHistoryRepository;
 import com.POA.AP6.repository.PageRepository;
 import com.POA.AP6.strategy.SlugGenerationStrategy;
+import java.text.Normalizer;
 import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.context.ApplicationEventPublisher;
@@ -31,6 +33,30 @@ public class PageService {
 	private static final int MAX_SEARCH_QUERY_LENGTH = 100;
 	private static final int DEFAULT_SEARCH_LIMIT = 20;
 	private static final int MAX_SEARCH_LIMIT = 50;
+	private static final Map<String, String> KEYWORD_ALIASES = Map.ofEntries(
+			Map.entry("manga", "manga"),
+			Map.entry("mangas", "manga"),
+			Map.entry("personagem", "personagem"),
+			Map.entry("personagens", "personagem"),
+			Map.entry("time", "time"),
+			Map.entry("times", "time"),
+			Map.entry("clube", "time"),
+			Map.entry("clubes", "time"),
+			Map.entry("equipe", "time"),
+			Map.entry("equipes", "time"),
+			Map.entry("partida", "partida"),
+			Map.entry("partidas", "partida"),
+			Map.entry("jogo", "partida"),
+			Map.entry("jogos", "partida"),
+			Map.entry("autor", "autor"),
+			Map.entry("autores", "autor"),
+			Map.entry("mangaka", "autor"),
+			Map.entry("roteirista", "autor"),
+			Map.entry("ilustrador", "autor"),
+			Map.entry("arco", "arco"),
+			Map.entry("arcos", "arco"),
+			Map.entry("saga", "arco"),
+			Map.entry("sagas", "arco"));
 
 	private final PageRepository pageRepository;
 	private final PageHistoryRepository pageHistoryRepository;
@@ -62,13 +88,14 @@ public class PageService {
 					.toList();
 		}
 
-		String normalizedQuery = normalizeSearchTerm(query);
+		String normalizedQuery = normalizeText(query);
 		if (normalizedQuery.length() > MAX_SEARCH_QUERY_LENGTH) {
 			throw new BusinessRuleException("A busca deve ter no maximo 100 caracteres.");
 		}
+		String canonicalKeywordQuery = canonicalizeKeyword(normalizedQuery);
 
 		return pageRepository.findByDeletedAtIsNullOrderByUpdatedAtDesc().stream()
-				.map(page -> new SearchResult(page, relevanceScore(page, normalizedQuery)))
+				.map(page -> new SearchResult(page, relevanceScore(page, normalizedQuery, canonicalKeywordQuery)))
 				.filter(result -> result.score() > 0)
 				.sorted(Comparator
 						.comparingInt(SearchResult::score).reversed()
@@ -188,7 +215,11 @@ public class PageService {
 				continue;
 			}
 
-			String normalizedKeyword = keyword.trim().toLowerCase(Locale.ROOT);
+			String normalizedKeyword = canonicalizeKeyword(normalizeText(keyword));
+			if (normalizedKeyword.isBlank()) {
+				continue;
+			}
+
 			if (normalizedKeyword.length() > MAX_KEYWORD_LENGTH) {
 				throw new BusinessRuleException("Cada keyword deve ter no maximo 50 caracteres.");
 			}
@@ -203,8 +234,16 @@ public class PageService {
 		return normalizedKeywords;
 	}
 
-	private String normalizeSearchTerm(String query) {
-		return query.trim().toLowerCase(Locale.ROOT);
+	private String normalizeText(String value) {
+		String withoutDiacritics = Normalizer.normalize(value.trim(), Normalizer.Form.NFD)
+				.replaceAll("\\p{M}", "");
+		return withoutDiacritics
+				.toLowerCase(Locale.ROOT)
+				.replaceAll("\\s+", " ");
+	}
+
+	private String canonicalizeKeyword(String keyword) {
+		return KEYWORD_ALIASES.getOrDefault(keyword, keyword);
 	}
 
 	private int resolveSearchLimit(Integer limit) {
@@ -219,10 +258,10 @@ public class PageService {
 		return limit;
 	}
 
-	private int relevanceScore(Page page, String query) {
-		String title = normalizeSearchTerm(page.getTitle());
-		String slug = normalizeSearchTerm(page.getSlug());
-		String content = normalizeSearchTerm(page.getContent());
+	private int relevanceScore(Page page, String query, String canonicalKeywordQuery) {
+		String title = normalizeText(page.getTitle());
+		String slug = normalizeText(page.getSlug());
+		String content = normalizeText(page.getContent());
 
 		if (title.equals(query)) {
 			return 100;
@@ -232,7 +271,7 @@ public class PageService {
 			return 80;
 		}
 
-		if (page.getKeywords().stream().anyMatch(keyword -> keyword.equals(query))) {
+		if (page.getKeywords().stream().map(this::normalizeStoredKeyword).anyMatch(keyword -> keyword.equals(canonicalKeywordQuery))) {
 			return 70;
 		}
 
@@ -240,7 +279,7 @@ public class PageService {
 			return 60;
 		}
 
-		if (page.getKeywords().stream().anyMatch(keyword -> keyword.contains(query))) {
+		if (page.getKeywords().stream().map(this::normalizeStoredKeyword).anyMatch(keyword -> keyword.contains(canonicalKeywordQuery))) {
 			return 50;
 		}
 
@@ -256,5 +295,9 @@ public class PageService {
 	}
 
 	private record SearchResult(Page page, int score) {
+	}
+
+	private String normalizeStoredKeyword(String keyword) {
+		return canonicalizeKeyword(normalizeText(keyword));
 	}
 }

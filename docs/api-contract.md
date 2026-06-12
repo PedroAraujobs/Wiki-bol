@@ -68,6 +68,15 @@ Body de criacao/edicao:
 }
 ```
 
+Keywords:
+
+- `keywords` e opcional.
+- A API remove espacos nas pontas, converte para lowercase, remove acentos para comparacao/canonicalizacao, colapsa espacos internos repetidos, ignora valores vazios e remove duplicatas apos normalizacao.
+- Cada pagina aceita ate 20 keywords, com no maximo 50 caracteres cada.
+- Variacoes digitadas pelo usuario como `manga`, `mangá` e `mangás` sao tratadas como equivalentes para salvar e buscar.
+- A busca por `manga` e `mangá` deve retornar o mesmo conjunto relevante de paginas, inclusive quando os dados existentes tiverem keywords com acento.
+- Aliases editoriais iniciais incluem `clubes`/`equipes` -> `time`, `jogos` -> `partida`, `mangaka`/`roteirista`/`ilustrador` -> `autor` e `sagas` -> `arco`.
+
 ## Upload de imagens
 
 ```http

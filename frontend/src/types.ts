@@ -40,9 +40,48 @@ export type PageDetails = {
   updatedAt: string;
 };
 
+export type PageHistoryEntry = {
+  id: string;
+  pageId: string;
+  version: number;
+  title: string;
+  content: string;
+  keywords: string[];
+  editedByName: string;
+  changeSummary: string | null;
+  createdAt: string;
+};
+
+export type PagePayload = {
+  title: string;
+  content: string;
+  keywords: string[];
+  changeSummary: string;
+};
+
+export type ImageUploadResponse = {
+  url: string;
+  markdown: string;
+  path: string;
+  contentType: string;
+  size: number;
+};
+
 export type ApiError = {
   timestamp: string;
   status: number;
   error: string;
   messages: string[];
 };
+
+export class ApiRequestError extends Error {
+  status: number;
+  messages: string[];
+
+  constructor(status: number, messages: string[]) {
+    super(messages.join(" "));
+    this.name = "ApiRequestError";
+    this.status = status;
+    this.messages = messages;
+  }
+}

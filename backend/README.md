@@ -197,7 +197,9 @@ Exemplo de criacao de pagina:
 }
 ```
 
-`keywords` e opcional. Quando enviada, a API normaliza os valores para lowercase, remove espacos nas pontas, ignora valores vazios e remove duplicatas. Cada pagina aceita ate 20 keywords, com no maximo 50 caracteres cada.
+`keywords` e opcional. Quando enviada, a API normaliza os valores para lowercase, remove espacos nas pontas, remove acentos para comparacao/canonicalizacao, colapsa espacos internos repetidos, ignora valores vazios e remove duplicatas apos normalizacao. Cada pagina aceita ate 20 keywords, com no maximo 50 caracteres cada.
+
+Variacoes digitadas pelo usuario como `manga`, `mangá` e `mangás` sao tratadas como equivalentes para salvar e buscar. A busca por `manga` e `mangá` deve retornar o mesmo conjunto relevante de paginas, inclusive quando dados existentes tiverem keywords com acento. Aliases editoriais iniciais incluem `clubes`/`equipes` -> `time`, `jogos` -> `partida`, `mangaka`/`roteirista`/`ilustrador` -> `autor` e `sagas` -> `arco`.
 
 Exemplo de busca publica:
 
@@ -205,7 +207,7 @@ Exemplo de busca publica:
 GET /api/pages/search?q=supabase&limit=20
 ```
 
-A busca usa um campo unico `q` e procura em titulo, slug, keywords e conteudo da pagina. Os resultados sao ordenados por relevancia e, em caso de empate, por atualizacao mais recente. O parametro `limit` e opcional, usa `20` por padrao e aceita valores de `1` a `50`. O termo `q` aceita ate `100` caracteres.
+A busca usa um campo unico `q` e procura em titulo, slug, keywords e conteudo da pagina. A comparacao remove acentos de titulo, slug e conteudo; para keywords, compara tambem contra o termo canonicalizado por aliases. Os resultados sao ordenados por relevancia e, em caso de empate, por atualizacao mais recente. O parametro `limit` e opcional, usa `20` por padrao e aceita valores de `1` a `50`. O termo `q` aceita ate `100` caracteres.
 
 O historico so e retornado para paginas ativas. Se a pagina nao existir ou tiver sido removida logicamente, a API retorna `404`.
 
