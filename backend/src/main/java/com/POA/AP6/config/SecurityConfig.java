@@ -2,8 +2,12 @@ package com.POA.AP6.config;
 
 import com.POA.AP6.service.CustomOAuth2UserService;
 import com.POA.AP6.service.CustomOidcUserService;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.time.LocalDateTime;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -41,12 +45,37 @@ public class SecurityConfig {
 		return configuredUrl;
 	}
 
+	static List<String> allowedCorsOrigins(String configuredFrontendUrl) {
+		Set<String> origins = new LinkedHashSet<>();
+		origins.add("http://localhost:3000");
+		origins.add("http://localhost:5173");
+		origins.add(resolveOrigin(resolveFrontendRedirectUrl(configuredFrontendUrl)));
+		return origins.stream().filter(origin -> origin != null && !origin.isBlank()).toList();
+	}
+
+	private static String resolveOrigin(String url) {
+		try {
+			URI uri = new URI(url);
+			if (uri.getScheme() == null || uri.getHost() == null) {
+				return url;
+			}
+
+			int port = uri.getPort();
+			return port > -1
+					? "%s://%s:%d".formatted(uri.getScheme(), uri.getHost(), port)
+					: "%s://%s".formatted(uri.getScheme(), uri.getHost());
+		} catch (URISyntaxException exception) {
+			return url;
+		}
+	}
+
 	@Bean
 	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
 		return http
 				.csrf(csrf -> csrf.disable())
 				.cors(Customizer.withDefaults())
 				.authorizeHttpRequests(auth -> auth
+						.requestMatchers(HttpMethod.GET, "/api/health").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/pages", "/api/pages/**").permitAll()
 						.requestMatchers(HttpMethod.POST, "/api/auth/logout").permitAll()
 						.requestMatchers("/", "/error").permitAll()
@@ -76,7 +105,7 @@ public class SecurityConfig {
 	@Bean
 	public CorsConfigurationSource corsConfigurationSource() {
 		CorsConfiguration configuration = new CorsConfiguration();
-		configuration.setAllowedOrigins(List.of("http://localhost:3000", "http://localhost:5173"));
+		configuration.setAllowedOrigins(allowedCorsOrigins(frontendUrl));
 		configuration.setAllowedMethods(List.of("GET", "POST", "PUT", "DELETE", "OPTIONS"));
 		configuration.setAllowedHeaders(List.of("*"));
 		configuration.setAllowCredentials(true);
