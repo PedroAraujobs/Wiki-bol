@@ -9,7 +9,15 @@ import type {
   PageSummary,
 } from "./types";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080";
+const API_BASE_URL = normalizeApiBaseUrl(import.meta.env.VITE_API_BASE_URL ?? "http://localhost:8080");
+
+function normalizeApiBaseUrl(baseUrl: string) {
+  return baseUrl.replace(/\/+$/, "");
+}
+
+function buildApiUrl(path: string) {
+  return `${API_BASE_URL}${path.startsWith("/") ? path : `/${path}`}`;
+}
 
 type RequestOptions = {
   method?: string;
@@ -45,7 +53,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     init.headers = headers;
   }
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
+  const response = await fetch(buildApiUrl(path), {
     ...init,
   });
 
@@ -61,7 +69,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
 }
 
 export function getGoogleLoginUrl() {
-  return `${API_BASE_URL}/oauth2/authorization/google`;
+  return buildApiUrl("/oauth2/authorization/google");
 }
 
 export function logout() {
@@ -136,7 +144,7 @@ export async function uploadImage(file: File, alt: string, pageId?: string) {
     formData.append("pageId", pageId);
   }
 
-  const response = await fetch(`${API_BASE_URL}/api/uploads/images`, {
+  const response = await fetch(buildApiUrl("/api/uploads/images"), {
     method: "POST",
     credentials: "include",
     body: formData,
