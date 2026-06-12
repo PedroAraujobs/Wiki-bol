@@ -15,6 +15,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -26,14 +27,17 @@ public class SecurityConfig {
 
 	private final CustomOAuth2UserService customOAuth2UserService;
 	private final CustomOidcUserService customOidcUserService;
+	private final OAuthRequestLoggingFilter oauthRequestLoggingFilter;
 	private final String frontendUrl;
 
 	public SecurityConfig(
 			CustomOAuth2UserService customOAuth2UserService,
 			CustomOidcUserService customOidcUserService,
+			OAuthRequestLoggingFilter oauthRequestLoggingFilter,
 			@Value("${app.frontend-url}") String frontendUrl) {
 		this.customOAuth2UserService = customOAuth2UserService;
 		this.customOidcUserService = customOidcUserService;
+		this.oauthRequestLoggingFilter = oauthRequestLoggingFilter;
 		this.frontendUrl = resolveFrontendRedirectUrl(frontendUrl);
 	}
 
@@ -74,6 +78,7 @@ public class SecurityConfig {
 		return http
 				.csrf(csrf -> csrf.disable())
 				.cors(Customizer.withDefaults())
+				.addFilterBefore(oauthRequestLoggingFilter, OAuth2AuthorizationRequestRedirectFilter.class)
 				.authorizeHttpRequests(auth -> auth
 						.requestMatchers(HttpMethod.GET, "/api/health").permitAll()
 						.requestMatchers(HttpMethod.GET, "/api/pages", "/api/pages/**").permitAll()

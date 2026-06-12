@@ -25,7 +25,11 @@ class SecurityConfigTest {
 
 	@Test
 	void corsAllowsConfiguredFrontendAndLocalDevelopmentOrigins() {
-		SecurityConfig config = new SecurityConfig(null, null, "https://wiki-bol.testpedrobot.workers.dev");
+		SecurityConfig config = new SecurityConfig(
+				null,
+				null,
+				new OAuthRequestLoggingFilter(),
+				"https://wiki-bol.testpedrobot.workers.dev");
 		UrlBasedCorsConfigurationSource source = (UrlBasedCorsConfigurationSource) config.corsConfigurationSource();
 		CorsConfiguration cors = source.getCorsConfigurations().get("/**");
 
