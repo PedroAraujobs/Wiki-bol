@@ -10,8 +10,11 @@ import com.POA.AP6.service.PageHistoryService;
 import com.POA.AP6.service.PageService;
 import com.POA.AP6.service.UserService;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
@@ -21,6 +24,7 @@ import org.springframework.test.web.servlet.MockMvc;
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(OAuthAuthorizationRedirectTest.MockServicesConfig.class)
+@ExtendWith(OutputCaptureExtension.class)
 @TestPropertySource(properties = {
 		"app.frontend-url=https://wiki-bol.testpedrobot.workers.dev",
 		"spring.datasource.url=jdbc:h2:mem:oauth-redirect-test;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE",
@@ -37,7 +41,7 @@ class OAuthAuthorizationRedirectTest {
 	private MockMvc mockMvc;
 
 	@Test
-	void googleAuthorizationStartRedirectsToGoogleWithPublicCallback() throws Exception {
+	void googleAuthorizationStartRedirectsToGoogleWithPublicCallback(CapturedOutput output) throws Exception {
 		String location = mockMvc
 				.perform(get("/oauth2/authorization/google")
 						.header("Host", "wiki-bol-api.onrender.com")
@@ -50,6 +54,8 @@ class OAuthAuthorizationRedirectTest {
 
 		assertThat(location).startsWith("https://accounts.google.com/o/oauth2/v2/auth?");
 		assertThat(location).contains("redirect_uri=https://wiki-bol-api.onrender.com/login/oauth2/code/google");
+		assertThat(output).contains("OAuth request started path=/oauth2/authorization/google");
+		assertThat(output).contains("OAuth request completed path=/oauth2/authorization/google status=302");
 	}
 
 	static class MockServicesConfig {
