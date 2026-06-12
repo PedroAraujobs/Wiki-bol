@@ -58,6 +58,23 @@ class OAuthAuthorizationRedirectTest {
 		assertThat(output).contains("OAuth request completed path=/oauth2/authorization/google status=302");
 	}
 
+	@Test
+	void invalidGoogleCallbackRedirectsToFrontendAndLogsFailure(CapturedOutput output) throws Exception {
+		String location = mockMvc
+				.perform(get("/login/oauth2/code/google")
+						.header("Host", "wiki-bol-api.onrender.com")
+						.header("X-Forwarded-Proto", "https")
+						.header("X-Forwarded-Host", "wiki-bol-api.onrender.com"))
+				.andExpect(status().isFound())
+				.andReturn()
+				.getResponse()
+				.getHeader("Location");
+
+		assertThat(location).isEqualTo("https://wiki-bol.testpedrobot.workers.dev");
+		assertThat(output).contains("OAuth login failed path=/login/oauth2/code/google");
+		assertThat(output).contains("OAuth request completed path=/login/oauth2/code/google status=302");
+	}
+
 	static class MockServicesConfig {
 		@Bean
 		UserService userService() {
