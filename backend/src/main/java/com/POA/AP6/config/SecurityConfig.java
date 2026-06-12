@@ -18,6 +18,8 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class SecurityConfig {
+	private static final String DEFAULT_FRONTEND_URL = "http://localhost:5173";
+
 	private final CustomOAuth2UserService customOAuth2UserService;
 	private final CustomOidcUserService customOidcUserService;
 	private final String frontendUrl;
@@ -28,7 +30,15 @@ public class SecurityConfig {
 			@Value("${app.frontend-url}") String frontendUrl) {
 		this.customOAuth2UserService = customOAuth2UserService;
 		this.customOidcUserService = customOidcUserService;
-		this.frontendUrl = frontendUrl;
+		this.frontendUrl = resolveFrontendRedirectUrl(frontendUrl);
+	}
+
+	static String resolveFrontendRedirectUrl(String configuredUrl) {
+		if (configuredUrl == null || configuredUrl.isBlank() || configuredUrl.contains("/api/")) {
+			return DEFAULT_FRONTEND_URL;
+		}
+
+		return configuredUrl;
 	}
 
 	@Bean

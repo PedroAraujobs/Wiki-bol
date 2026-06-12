@@ -84,6 +84,22 @@ class PageServiceTest {
 	}
 
 	@Test
+	void createCanonicalizesKeywordAliasesAccentsAndRepeatedSpaces() {
+		PageRequest request = new PageRequest(
+				"Titulo",
+				"Conteudo",
+				List.of(" Mang\u00e1 ", "manga", "MANG\u00c1S", "clubes", "time", "blue   lock"),
+				"Criacao");
+		when(slugGenerationStrategy.generateSlug("Titulo")).thenReturn("titulo");
+		when(pageRepository.existsBySlug("titulo")).thenReturn(false);
+		when(pageRepository.save(any(Page.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+		Page page = pageService.create(request, user);
+
+		assertEquals(List.of("manga", "time", "blue lock"), page.getKeywords().stream().toList());
+	}
+
+	@Test
 	void updateChangesContentAndIncrementsVersion() {
 		UUID id = UUID.randomUUID();
 		Page page = page(id, "Antigo", "antigo", "Conteudo antigo", 1);
@@ -102,6 +118,23 @@ class PageServiceTest {
 	}
 
 	@Test
+	void updateCanonicalizesKeywordAliases() {
+		UUID id = UUID.randomUUID();
+		Page page = page(id, "Antigo", "antigo", "Conteudo antigo", 1);
+		PageRequest request = new PageRequest(
+				"Novo",
+				"Conteudo novo",
+				List.of("personagens", "personagem", "jogos", "partida", "mangak\u00e1", "autor"),
+				"Edicao");
+		when(pageRepository.findById(id)).thenReturn(Optional.of(page));
+		when(pageRepository.save(page)).thenReturn(page);
+
+		Page updated = pageService.update(id, request, user);
+
+		assertEquals(List.of("personagem", "partida", "autor"), updated.getKeywords().stream().toList());
+	}
+
+	@Test
 	void searchReturnsResultsOrderedByRelevanceThenUpdatedAt() {
 		Page exactTitle = page(UUID.randomUUID(), "Java", "java", "Conteudo", 1);
 		exactTitle.setUpdatedAt(LocalDateTime.now().minusDays(4));
@@ -116,6 +149,31 @@ class PageServiceTest {
 		List<Page> result = pageService.search("java", 20);
 
 		assertEquals(List.of(exactTitle, keywordExact, contentMatch), result);
+	}
+
+	@Test
+	void searchMatchesKeywordAcrossAccentsAndAliases() {
+		Page page = page(UUID.randomUUID(), "Ao Ashi", "ao-ashi", "Conteudo", 1);
+		page.setKeywords(new LinkedHashSet<>(List.of("manga", "time")));
+		Page legacyAccentKeyword = page(UUID.randomUUID(), "Blue Lock", "blue-lock", "Conteudo", 1);
+		legacyAccentKeyword.setKeywords(new LinkedHashSet<>(List.of("mang\u00e1")));
+		when(pageRepository.findByDeletedAtIsNullOrderByUpdatedAtDesc()).thenReturn(List.of(page));
+
+		assertEquals(List.of(page), pageService.search("mang\u00e1", 20));
+		assertEquals(List.of(page), pageService.search("clubes", 20));
+
+		when(pageRepository.findByDeletedAtIsNullOrderByUpdatedAtDesc()).thenReturn(List.of(legacyAccentKeyword));
+		assertEquals(List.of(legacyAccentKeyword), pageService.search("manga", 20));
+	}
+
+	@Test
+	void searchMatchesAccentedTextWithAsciiQuery() {
+		Page page = page(UUID.randomUUID(), "Titulo", "titulo", "Mang\u00e1 sobre futebol", 1);
+		when(pageRepository.findByDeletedAtIsNullOrderByUpdatedAtDesc()).thenReturn(List.of(page));
+
+		List<Page> result = pageService.search("manga", 20);
+
+		assertEquals(List.of(page), result);
 	}
 
 	@Test

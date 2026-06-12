@@ -2,46 +2,25 @@
 
 Backlog das telas e funcionalidades do frontend do monorepo `Wiki-bol`. O backend fica em `backend/`; este arquivo organiza a experiencia do usuario final da wiki.
 
+Plano detalhado das telas de alta prioridade e direcao visual: [`docs/frontend-screen-plan.md`](docs/frontend-screen-plan.md).
+
 ## Concluido
 
 - Estrutura inicial do monorepo com `backend/`, `frontend/` e `docs/`.
 - Frontend React + Vite + TypeScript criado.
-- Tela inicial tecnica consumindo API para listar, buscar e carregar paginas.
-- Integracao inicial com login Google via redirecionamento para o backend.
+- Shell editorial com navegacao lateral, area de sessao no topo, login Google e logout.
+- Listagem e busca de paginas com estados de loading, vazio e erro.
+- Leitura de artigo com Markdown, breadcrumbs, tags, acoes contextuais e rodape editorial.
+- Criacao e edicao de paginas com preview Markdown, upload de imagem e slug imutavel na edicao.
+- Delete com modal customizado e visibilidade restrita a autor original ou `ADMIN`.
+- Normalizacao/canonicalizacao de keywords no frontend e backend:
+  - busca por `manga` e `mangá` retorna resultados equivalentes;
+  - aliases editoriais como `clubes` -> `time` e `jogos` -> `partida` sao considerados na busca;
+  - keywords digitadas pelo usuario continuam podendo ter acento na origem, mas a API protege consistencia ao salvar e buscar.
+- Testes automatizados de frontend para shell, busca, leitura, criacao, edicao, upload, logout e delete.
+- Testes de backend para OAuth redirect, normalizacao de keywords e busca acento-insensivel no endpoint real.
 
-## Alta prioridade
-
-- Tela base da aplicacao autenticada e publica:
-  - layout principal com navegacao lateral ou superior;
-  - area de status de login;
-  - acao "Entrar com Google";
-  - tratamento visual para usuario visitante, `USER` e `ADMIN`.
-- Tela de listagem e busca de paginas:
-  - busca por campo unico;
-  - listagem de resultados;
-  - estados de carregamento, vazio e erro;
-  - exibicao de titulo, keywords, autor e ultima atualizacao.
-- Tela de leitura de pagina:
-  - renderizacao de Markdown;
-  - exibicao de titulo, keywords, autor, versao e data de atualizacao;
-  - acoes contextuais para editar, ver historico e deletar conforme permissao.
-- Tela/formulario de criacao de pagina:
-  - campos `title`, `content`, `keywords` e `changeSummary`;
-  - editor Markdown;
-  - preview do Markdown;
-  - validacoes basicas antes de enviar.
-- Tela/formulario de edicao de pagina:
-  - carregar pagina existente;
-  - editar `title`, `content`, `keywords` e `changeSummary`;
-  - preservar slug imutavel;
-  - mostrar feedback de sucesso/erro.
-- Fluxo de upload de imagens no editor:
-  - selecionar arquivo;
-  - enviar para `POST /api/uploads/images`;
-  - inserir o Markdown retornado no conteudo;
-  - tratar erros de formato, tamanho e sessao.
-
-## Media prioridade
+## Alta prioridade atual
 
 - Tela ou painel de historico de versoes:
   - listar versoes;
@@ -60,6 +39,9 @@ Backlog das telas e funcionalidades do frontend do monorepo `Wiki-bol`. O backen
   - `403`: mostrar falta de permissao;
   - `404`: pagina nao encontrada;
   - `400`: mostrar mensagens retornadas pela API.
+
+## Media prioridade
+
 - Persistencia local de preferencias simples:
   - ultima busca;
   - modo editor/preview;
