@@ -116,8 +116,9 @@ Se o painel estiver usando Cloudflare Workers com static assets, configure:
 Root directory: frontend
 Build command: npm ci && npm run build
 Deploy command: npx wrangler deploy
-Version command: npx wrangler versions upload
 ```
+
+Use `npx wrangler deploy` no campo `Deploy command`. O comando `npx wrangler versions upload` apenas cria uma versao/preview e nao aplica a versao no trafego de producao.
 
 O arquivo `frontend/wrangler.jsonc` aponta o deploy para `./dist` e configura fallback de SPA.
 

@@ -45,8 +45,9 @@ Se o projeto estiver configurado no painel como Cloudflare Workers com static as
 Root directory: frontend
 Build command: npm ci && npm run build
 Deploy command: npx wrangler deploy
-Version command: npx wrangler versions upload
 ```
+
+Use `npx wrangler deploy` no campo `Deploy command`. O comando `npx wrangler versions upload` apenas cria uma versao/preview e nao aplica a versao no trafego de producao.
 
 Nesse fluxo, o arquivo `frontend/wrangler.jsonc` publica `./dist` e usa `not_found_handling: "single-page-application"` para rotas do React. Nao adicione `_redirects` nesse modo, porque o Wrangler valida esse arquivo e pode bloquear o deploy por loop de redirect.
 
