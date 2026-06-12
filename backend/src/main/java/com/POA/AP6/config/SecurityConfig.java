@@ -13,6 +13,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestRedirectFilter;
@@ -23,6 +25,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 @Configuration
 public class SecurityConfig {
+	private static final Logger logger = LoggerFactory.getLogger(SecurityConfig.class);
 	private static final String DEFAULT_FRONTEND_URL = "http://localhost:5173";
 
 	private final CustomOAuth2UserService customOAuth2UserService;
@@ -99,7 +102,22 @@ public class SecurityConfig {
 							response.sendRedirect("/oauth2/authorization/google");
 						}))
 				.oauth2Login(oauth -> oauth
-						.successHandler((request, response, authentication) -> response.sendRedirect(frontendUrl))
+						.successHandler((request, response, authentication) -> {
+							logger.info(
+									"OAuth login succeeded principal={} redirect={}",
+									authentication.getName(),
+									frontendUrl);
+							response.sendRedirect(frontendUrl);
+						})
+						.failureHandler((request, response, exception) -> {
+							logger.warn(
+									"OAuth login failed path={} exception={} message={} redirect={}",
+									request.getRequestURI(),
+									exception.getClass().getName(),
+									exception.getMessage(),
+									frontendUrl);
+							response.sendRedirect(frontendUrl);
+						})
 						.userInfoEndpoint(userInfo -> userInfo
 								.userService(customOAuth2UserService)
 								.oidcUserService(customOidcUserService)))
