@@ -98,6 +98,12 @@ export function getPageHistory(pageId: string) {
   return request<PageHistoryEntry[]>(`/api/pages/${pageId}/history`);
 }
 
+export function restorePageVersion(pageId: string, version: number) {
+  return request<PageDetails>(`/api/pages/${pageId}/history/${version}/restore`, {
+    method: "POST",
+  });
+}
+
 export function createPage(payload: PagePayload) {
   return request<PageDetails>("/api/pages", {
     method: "POST",

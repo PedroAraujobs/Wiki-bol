@@ -1,4 +1,4 @@
-import { FormEvent, createContext, useContext, useEffect, useState } from "react";
+import { FormEvent, createContext, useContext, useEffect, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import {
   BrowserRouter,
@@ -13,7 +13,23 @@ import {
   useParams,
 } from "react-router-dom";
 import remarkGfm from "remark-gfm";
-import { Edit3, ImagePlus, LogIn, LogOut, Plus, Save, Search, Trash2 } from "lucide-react";
+import {
+  Bold,
+  Edit3,
+  Heading1,
+  History,
+  ImagePlus,
+  Italic,
+  Link as LinkIcon,
+  List,
+  LogIn,
+  LogOut,
+  Plus,
+  RotateCcw,
+  Save,
+  Search,
+  Trash2,
+} from "lucide-react";
 import {
   ApiRequestError,
   type CurrentUser,
@@ -31,6 +47,7 @@ import {
   getPageBySlug,
   listPages,
   logout,
+  restorePageVersion,
   searchPages,
   updatePage,
   uploadImage,
@@ -48,6 +65,11 @@ type FormState = {
   content: string;
   keywords: string;
   changeSummary: string;
+};
+
+type DiffLine = {
+  kind: "added" | "removed" | "unchanged";
+  text: string;
 };
 
 const KEYWORD_ALIASES: Record<string, string> = {
@@ -126,6 +148,61 @@ function normalizeKeywords(value: string) {
   );
 }
 
+function normalizeKeywordValue(keyword: string) {
+  return normalizeKeywords(keyword)[0] ?? keyword.trim();
+}
+
+function keywordHref(keyword: string) {
+  return `/pages?keyword=${encodeURIComponent(normalizeKeywordValue(keyword))}`;
+}
+
+function diffLines(fromText: string, toText: string): DiffLine[] {
+  const fromLines = fromText.split(/\r?\n/);
+  const toLines = toText.split(/\r?\n/);
+  const lengths = Array.from({ length: fromLines.length + 1 }, () =>
+    Array.from({ length: toLines.length + 1 }, () => 0),
+  );
+
+  for (let fromIndex = fromLines.length - 1; fromIndex >= 0; fromIndex -= 1) {
+    for (let toIndex = toLines.length - 1; toIndex >= 0; toIndex -= 1) {
+      lengths[fromIndex][toIndex] =
+        fromLines[fromIndex] === toLines[toIndex]
+          ? lengths[fromIndex + 1][toIndex + 1] + 1
+          : Math.max(lengths[fromIndex + 1][toIndex], lengths[fromIndex][toIndex + 1]);
+    }
+  }
+
+  const result: DiffLine[] = [];
+  let fromIndex = 0;
+  let toIndex = 0;
+
+  while (fromIndex < fromLines.length && toIndex < toLines.length) {
+    if (fromLines[fromIndex] === toLines[toIndex]) {
+      result.push({ kind: "unchanged", text: fromLines[fromIndex] });
+      fromIndex += 1;
+      toIndex += 1;
+    } else if (lengths[fromIndex + 1][toIndex] >= lengths[fromIndex][toIndex + 1]) {
+      result.push({ kind: "removed", text: fromLines[fromIndex] });
+      fromIndex += 1;
+    } else {
+      result.push({ kind: "added", text: toLines[toIndex] });
+      toIndex += 1;
+    }
+  }
+
+  while (fromIndex < fromLines.length) {
+    result.push({ kind: "removed", text: fromLines[fromIndex] });
+    fromIndex += 1;
+  }
+
+  while (toIndex < toLines.length) {
+    result.push({ kind: "added", text: toLines[toIndex] });
+    toIndex += 1;
+  }
+
+  return result;
+}
+
 function App() {
   return (
     <BrowserRouter>
@@ -134,6 +211,7 @@ function App() {
           <Route index element={<Navigate to="/pages" replace />} />
           <Route path="/pages" element={<PageListPage />} />
           <Route path="/pages/new" element={<PageEditorPage mode="create" />} />
+          <Route path="/pages/:slug/history" element={<PageHistoryPage />} />
           <Route path="/pages/:slug" element={<ArticlePage />} />
           <Route path="/pages/:slug/edit" element={<PageEditorPage mode="edit" />} />
           <Route path="*" element={<NotFoundPage />} />
@@ -287,6 +365,7 @@ function SessionStatus({
 function PageListPage() {
   const { user } = useSession();
   const location = useLocation();
+  const navigate = useNavigate();
   const notice = (location.state as { notice?: string } | null)?.notice;
   const [pages, setPages] = useState<PageSummary[]>([]);
   const [query, setQuery] = useState("");
@@ -294,16 +373,28 @@ function PageListPage() {
   const [message, setMessage] = useState(notice ?? "");
 
   useEffect(() => {
-    void loadPages();
-  }, [notice]);
+    const params = new URLSearchParams(location.search);
+    const keyword = params.get("keyword")?.trim() ?? "";
+    const searchQuery = params.get("q")?.trim() ?? "";
+    const activeQuery = keyword || searchQuery;
 
-  async function loadPages() {
+    setQuery(activeQuery);
+    void loadPages(activeQuery, keyword ? "keyword" : activeQuery ? "search" : "list");
+  }, [location.search, notice]);
+
+  async function loadPages(activeQuery = "", mode: "list" | "search" | "keyword" = "list") {
     setStatus("loading");
     try {
-      const result = await listPages();
+      const result = activeQuery ? await searchPages(activeQuery) : await listPages();
       setPages(result);
       setStatus(result.length > 0 ? "ready" : "empty");
-      setMessage(notice ?? (result.length > 0 ? "Paginas recentes" : "Nenhuma pagina cadastrada."));
+      if (mode === "keyword") {
+        setMessage(result.length > 0 ? `Paginas com keyword: ${activeQuery}` : "Nenhum resultado encontrado.");
+      } else if (mode === "search") {
+        setMessage(result.length > 0 ? `${result.length} resultado(s) encontrado(s).` : "Nenhum resultado encontrado.");
+      } else {
+        setMessage(notice ?? (result.length > 0 ? "Paginas recentes" : "Nenhuma pagina cadastrada."));
+      }
     } catch (error) {
       setStatus("error");
       setMessage(getErrorMessage(error));
@@ -312,17 +403,12 @@ function PageListPage() {
 
   async function handleSearch(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setStatus("loading");
+    const trimmedQuery = query.trim();
 
-    try {
-      const trimmedQuery = query.trim();
-      const result = trimmedQuery ? await searchPages(trimmedQuery) : await listPages();
-      setPages(result);
-      setStatus(result.length > 0 ? "ready" : "empty");
-      setMessage(result.length > 0 ? `${result.length} resultado(s) encontrado(s).` : "Nenhum resultado encontrado.");
-    } catch (error) {
-      setStatus("error");
-      setMessage(getErrorMessage(error));
+    if (trimmedQuery) {
+      navigate(`/pages?q=${encodeURIComponent(trimmedQuery)}`);
+    } else {
+      navigate("/pages");
     }
   }
 
@@ -383,15 +469,17 @@ function PageListPage() {
 
 function PageResult({ page }: { page: PageSummary }) {
   return (
-    <Link className="page-result" to={`/pages/${page.slug}`}>
-      <span className="result-title">{page.title}</span>
+    <article className="page-result">
+      <Link className="result-title" to={`/pages/${page.slug}`}>
+        {page.title}
+      </Link>
       <span className="result-meta">
         <span>v{page.currentVersion}</span>
         <span>{page.authorName}</span>
         <span>{formatDate(page.updatedAt)}</span>
       </span>
       <KeywordRow keywords={page.keywords} />
-    </Link>
+    </article>
   );
 }
 
@@ -400,10 +488,11 @@ function ArticlePage() {
   const { slug } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const statePage = (location.state as { page?: PageDetails } | null)?.page;
+  const locationState = location.state as { page?: PageDetails; notice?: string } | null;
+  const statePage = locationState?.page;
   const [page, setPage] = useState<PageDetails | null>(statePage ?? null);
   const [status, setStatus] = useState<"loading" | "ready" | "not-found" | "error">(statePage ? "ready" : "loading");
-  const [message, setMessage] = useState("");
+  const [message, setMessage] = useState(locationState?.notice ?? "");
   const [history, setHistory] = useState<PageHistoryEntry[]>([]);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -527,9 +616,10 @@ function ArticlePage() {
               Editar pagina
             </Link>
           ) : null}
-          <button type="button" className="button secondary-button" disabled>
-            Historico em breve
-          </button>
+          <Link className="button secondary-button" to={`/pages/${page.slug}/history`}>
+            <History aria-hidden="true" size={16} />
+            Historico
+          </Link>
           {canDelete ? (
             <button type="button" className="button danger-button" onClick={() => setIsDeleteOpen(true)}>
               <Trash2 aria-hidden="true" size={16} />
@@ -594,10 +684,293 @@ function ArticlePage() {
   );
 }
 
+function PageHistoryPage() {
+  const { user } = useSession();
+  const { slug } = useParams();
+  const navigate = useNavigate();
+  const [page, setPage] = useState<PageDetails | null>(null);
+  const [history, setHistory] = useState<PageHistoryEntry[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "not-found" | "error">("loading");
+  const [message, setMessage] = useState("");
+  const [fromVersion, setFromVersion] = useState<number | null>(null);
+  const [toVersion, setToVersion] = useState<number | null>(null);
+  const [selectedVersion, setSelectedVersion] = useState<number | null>(null);
+  const [restoreTarget, setRestoreTarget] = useState<PageHistoryEntry | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
+
+  useEffect(() => {
+    if (!slug) {
+      return;
+    }
+
+    const pageSlug = slug;
+    let isActive = true;
+
+    async function loadHistoryPage() {
+      setStatus("loading");
+      setMessage("");
+
+      try {
+        const loadedPage = await getPageBySlug(pageSlug);
+        const loadedHistory = await getPageHistory(loadedPage.id);
+
+        if (isActive) {
+          setPage(loadedPage);
+          setHistory(loadedHistory);
+          setSelectedVersion(loadedHistory[0]?.version ?? null);
+          setFromVersion(loadedHistory[1]?.version ?? null);
+          setToVersion(loadedHistory[0]?.version ?? null);
+          setStatus("ready");
+        }
+      } catch (error) {
+        if (isActive) {
+          if (error instanceof ApiRequestError && error.status === 404) {
+            setStatus("not-found");
+            setMessage("Pagina nao encontrada.");
+          } else {
+            setStatus("error");
+            setMessage(getErrorMessage(error));
+          }
+        }
+      }
+    }
+
+    void loadHistoryPage();
+
+    return () => {
+      isActive = false;
+    };
+  }, [slug]);
+
+  if (status === "loading") {
+    return <LoadingState label="Carregando historico..." />;
+  }
+
+  if (status === "not-found") {
+    return <EmptyState title="Pagina nao encontrada" description={message} />;
+  }
+
+  if (status === "error" || !page) {
+    return <InlineError message={message || "Nao foi possivel carregar o historico."} />;
+  }
+
+  const selectedEntry = history.find((entry) => entry.version === selectedVersion) ?? history[0] ?? null;
+  const fromEntry = history.find((entry) => entry.version === fromVersion) ?? null;
+  const toEntry = history.find((entry) => entry.version === toVersion) ?? null;
+  const selectedIsCurrentVersion = selectedEntry?.version === page.currentVersion;
+  const canRestore = Boolean(
+    selectedEntry && !selectedIsCurrentVersion && user && (user.role === "ADMIN" || page.author.id === user.id),
+  );
+
+  async function handleRestore() {
+    if (!page || !restoreTarget) {
+      return;
+    }
+
+    setIsRestoring(true);
+    setMessage("");
+
+    try {
+      const restoredPage = await restorePageVersion(page.id, restoreTarget.version);
+      navigate(`/pages/${restoredPage.slug}`, {
+        state: {
+          page: restoredPage,
+          notice: `Versao restaurada a partir da v${restoreTarget.version}.`,
+        },
+      });
+    } catch (error) {
+      setRestoreTarget(null);
+      setMessage(getErrorMessage(error));
+    } finally {
+      setIsRestoring(false);
+    }
+  }
+
+  return (
+    <section className="screen-stack history-screen">
+      <header className="screen-header">
+        <div>
+          <nav className="breadcrumb" aria-label="Breadcrumb">
+            <Link to="/pages">Wiki Bol</Link>
+            <span>/</span>
+            <Link to={`/pages/${page.slug}`}>{page.title}</Link>
+            <span>/</span>
+            <span>Historico</span>
+          </nav>
+          <p className="eyebrow">Auditoria editorial</p>
+          <h1>Historico de {page.title}</h1>
+          <p>Compare versoes, revise alteracoes e restaure snapshots quando necessario.</p>
+        </div>
+      </header>
+
+      {message ? <p className="inline-error">{message}</p> : null}
+
+      {history.length === 0 ? (
+        <EmptyState title="Historico vazio" description="Esta pagina ainda nao tem snapshots registrados." />
+      ) : (
+        <div className="history-layout">
+          <aside className="history-list" aria-label="Versoes da pagina">
+            <h2>Versoes</h2>
+            {history.map((entry) => (
+              <button
+                type="button"
+                key={entry.id}
+                className={entry.version === selectedEntry?.version ? "history-version active" : "history-version"}
+                onClick={() => setSelectedVersion(entry.version)}
+              >
+                <strong>
+                  v{entry.version} {entry.changeSummary || "Alteracao registrada"}
+                </strong>
+                <span>{entry.editedByName}</span>
+                <span>{formatDate(entry.createdAt)}</span>
+              </button>
+            ))}
+          </aside>
+
+          <div className="history-main">
+            <section className="history-panel">
+              <div className="history-panel-header">
+                <div>
+                  <p className="eyebrow">Comparacao</p>
+                  <h2>Comparacao visual</h2>
+                </div>
+                {history.length > 1 ? (
+                  <div className="compare-controls">
+                    <label>
+                      Comparar de
+                      <select
+                        value={fromVersion ?? ""}
+                        onChange={(event) => setFromVersion(Number(event.target.value))}
+                      >
+                        {history.map((entry) => (
+                          <option value={entry.version} key={entry.id}>
+                            v{entry.version}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                    <label>
+                      Comparar com
+                      <select value={toVersion ?? ""} onChange={(event) => setToVersion(Number(event.target.value))}>
+                        {history.map((entry) => (
+                          <option value={entry.version} key={entry.id}>
+                            v{entry.version}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                ) : null}
+              </div>
+
+              {history.length < 2 || !fromEntry || !toEntry ? (
+                <p className="status-text">E necessario ter ao menos duas versoes para comparar alteracoes.</p>
+              ) : (
+                <VersionComparison fromEntry={fromEntry} toEntry={toEntry} />
+              )}
+            </section>
+
+            {selectedEntry ? (
+              <section className="history-panel">
+                <div className="history-panel-header">
+                  <div>
+                    <p className="eyebrow">Snapshot</p>
+                    <h2>Preview da versao v{selectedEntry.version}</h2>
+                  </div>
+                  {canRestore ? (
+                    <button
+                      type="button"
+                      className="button danger-button"
+                      onClick={() => setRestoreTarget(selectedEntry)}
+                    >
+                      <RotateCcw aria-hidden="true" size={16} />
+                      Restaurar versao v{selectedEntry.version}
+                    </button>
+                  ) : selectedIsCurrentVersion ? (
+                    <span className="current-version-pill">Versao atual</span>
+                  ) : null}
+                </div>
+                <div className="snapshot-meta">
+                  <span>{selectedEntry.editedByName}</span>
+                  <span>{formatDate(selectedEntry.createdAt)}</span>
+                  {selectedEntry.changeSummary ? <span>{selectedEntry.changeSummary}</span> : null}
+                </div>
+                <h3>{selectedEntry.title}</h3>
+                <KeywordRow keywords={selectedEntry.keywords} />
+                <div className="markdown-body">
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{selectedEntry.content}</ReactMarkdown>
+                </div>
+              </section>
+            ) : null}
+          </div>
+        </div>
+      )}
+
+      <ConfirmModal
+        isOpen={Boolean(restoreTarget)}
+        title="Restaurar versao"
+        confirmLabel={isRestoring ? "Restaurando..." : "Confirmar restore"}
+        onCancel={() => setRestoreTarget(null)}
+        onConfirm={() => void handleRestore()}
+      >
+        Uma nova versao sera criada usando o conteudo, titulo e keywords da v{restoreTarget?.version}.
+      </ConfirmModal>
+    </section>
+  );
+}
+
+function VersionComparison({ fromEntry, toEntry }: { fromEntry: PageHistoryEntry; toEntry: PageHistoryEntry }) {
+  const addedKeywords = toEntry.keywords.filter((keyword) => !fromEntry.keywords.includes(keyword));
+  const removedKeywords = fromEntry.keywords.filter((keyword) => !toEntry.keywords.includes(keyword));
+  const contentDiff = diffLines(fromEntry.content, toEntry.content);
+
+  return (
+    <div className="diff-stack">
+      {fromEntry.title !== toEntry.title ? (
+        <section className="diff-meta-block">
+          <h3>Titulo alterado</h3>
+          <div className="diff-meta-values">
+            <span className="diff-token removed">{fromEntry.title}</span>
+            <span className="diff-token added">{toEntry.title}</span>
+          </div>
+        </section>
+      ) : null}
+
+      {addedKeywords.length > 0 || removedKeywords.length > 0 ? (
+        <section className="diff-meta-block">
+          <h3>Keywords alteradas</h3>
+          <div className="diff-meta-values">
+            {removedKeywords.map((keyword) => (
+              <span className="diff-token removed" key={`removed-${keyword}`}>
+                {keyword}
+              </span>
+            ))}
+            {addedKeywords.map((keyword) => (
+              <span className="diff-token added" key={`added-${keyword}`}>
+                {keyword}
+              </span>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="diff-content" aria-label="Diferencas do conteudo">
+        {contentDiff.map((line, index) => (
+          <pre className={`diff-line diff-line-${line.kind}`} key={`${line.kind}-${index}-${line.text}`}>
+            <span aria-hidden="true">{line.kind === "added" ? "+" : line.kind === "removed" ? "-" : " "}</span>
+            {line.text || " "}
+          </pre>
+        ))}
+      </section>
+    </div>
+  );
+}
+
 function PageEditorPage({ mode }: { mode: EditorMode }) {
   const { user } = useSession();
   const { slug } = useParams();
   const navigate = useNavigate();
+  const contentRef = useRef<HTMLTextAreaElement | null>(null);
   const [existingPage, setExistingPage] = useState<PageDetails | null>(null);
   const [form, setForm] = useState<FormState>({
     title: "",
@@ -606,6 +979,7 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
     keywords: "",
     changeSummary: "",
   });
+  const [editorView, setEditorView] = useState<"editor" | "preview">("editor");
   const [status, setStatus] = useState<"idle" | "loading" | "saving" | "error">(
     mode === "edit" ? "loading" : "idle",
   );
@@ -688,6 +1062,54 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
     };
   }
 
+  function insertContentAtCursor(insertedText: string) {
+    const textarea = contentRef.current;
+    const start = textarea?.selectionStart ?? form.content.length;
+    const end = textarea?.selectionEnd ?? form.content.length;
+    const nextContent = `${form.content.slice(0, start)}${insertedText}${form.content.slice(end)}`;
+    const nextCursor = start + insertedText.length;
+
+    setForm((current) => ({
+      ...current,
+      content: nextContent,
+    }));
+
+    window.setTimeout(() => {
+      textarea?.focus();
+      textarea?.setSelectionRange(nextCursor, nextCursor);
+    }, 0);
+  }
+
+  function applyMarkdownWrap(prefix: string, suffix: string, placeholder: string) {
+    const textarea = contentRef.current;
+    const start = textarea?.selectionStart ?? form.content.length;
+    const end = textarea?.selectionEnd ?? form.content.length;
+    const selectedText = form.content.slice(start, end) || placeholder;
+    insertContentAtCursor(`${prefix}${selectedText}${suffix}`);
+  }
+
+  function applyMarkdownLine(prefix: string, placeholder: string) {
+    const textarea = contentRef.current;
+    const start = textarea?.selectionStart ?? form.content.length;
+    const end = textarea?.selectionEnd ?? form.content.length;
+    const selectedText = form.content.slice(start, end) || placeholder;
+    insertContentAtCursor(`${prefix}${selectedText}`);
+  }
+
+  function handleLinkInsert() {
+    const text = window.prompt("Texto do link", "Site oficial");
+    if (!text) {
+      return;
+    }
+
+    const url = window.prompt("URL do link", "https://");
+    if (!url) {
+      return;
+    }
+
+    insertContentAtCursor(`[${text}](${url})`);
+  }
+
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -721,10 +1143,7 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
     setMessage("Enviando imagem...");
     try {
       const image = await uploadImage(file, file.name.replace(/\.[^.]+$/, ""), existingPage?.id);
-      setForm((current) => ({
-        ...current,
-        content: current.content ? `${current.content}\n\n${image.markdown}` : image.markdown,
-      }));
+      insertContentAtCursor(`${image.markdown}\n`);
       setMessage("Imagem inserida no editor.");
     } catch (error) {
       setMessage(getErrorMessage(error));
@@ -746,7 +1165,24 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
       {message ? <p className={message.includes("obrigatorios") ? "inline-error" : "status-text"}>{message}</p> : null}
 
       <form className="editor-grid" onSubmit={(event) => void handleSubmit(event)}>
-        <section className="editor-main" aria-label="Editor">
+        <div className="editor-tabs" role="tablist" aria-label="Modo do editor">
+          <button
+            type="button"
+            className={editorView === "editor" ? "editor-tab active" : "editor-tab"}
+            onClick={() => setEditorView("editor")}
+          >
+            Editor
+          </button>
+          <button
+            type="button"
+            className={editorView === "preview" ? "editor-tab active" : "editor-tab"}
+            onClick={() => setEditorView("preview")}
+          >
+            Preview
+          </button>
+        </div>
+
+        <section className={editorView === "preview" ? "editor-main editor-pane-hidden-mobile" : "editor-main"} aria-label="Editor">
           <label>
             Titulo
             <input value={form.title} onChange={(event) => updateField("title", event.target.value)} />
@@ -759,15 +1195,39 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
             </label>
           ) : null}
 
-          <label>
-            Conteudo
+          <div className="content-editor-field">
+            <label htmlFor="page-content">Conteudo</label>
+            <div className="markdown-toolbar" role="toolbar" aria-label="Ferramentas Markdown">
+              <button type="button" className="toolbar-button" onClick={() => applyMarkdownWrap("**", "**", "texto")}>
+                <Bold aria-hidden="true" size={16} />
+                Negrito
+              </button>
+              <button type="button" className="toolbar-button" onClick={() => applyMarkdownWrap("*", "*", "texto")}>
+                <Italic aria-hidden="true" size={16} />
+                Italico
+              </button>
+              <button type="button" className="toolbar-button" onClick={() => applyMarkdownLine("# ", "Titulo")}>
+                <Heading1 aria-hidden="true" size={16} />
+                Titulo
+              </button>
+              <button type="button" className="toolbar-button" onClick={() => applyMarkdownLine("- ", "Item")}>
+                <List aria-hidden="true" size={16} />
+                Lista
+              </button>
+              <button type="button" className="toolbar-button" onClick={handleLinkInsert}>
+                <LinkIcon aria-hidden="true" size={16} />
+                Link
+              </button>
+            </div>
             <textarea
+              id="page-content"
+              ref={contentRef}
               value={form.content}
               onChange={(event) => updateField("content", event.target.value)}
               rows={16}
               placeholder="# Titulo da secao"
             />
-          </label>
+          </div>
 
           <label className="file-action">
             <ImagePlus aria-hidden="true" size={16} />
@@ -808,7 +1268,7 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
           </button>
         </aside>
 
-        <section className="preview-panel" aria-label="Preview do Markdown">
+        <section className={editorView === "editor" ? "preview-panel preview-pane-hidden-mobile" : "preview-panel"} aria-label="Preview do Markdown">
           <p className="eyebrow">Preview</p>
           <h2>Preview do artigo</h2>
           <div className="markdown-body">
@@ -828,9 +1288,9 @@ function KeywordRow({ keywords }: { keywords: string[] }) {
   return (
     <div className="keyword-row">
       {keywords.map((keyword) => (
-        <span className="keyword-chip" key={keyword}>
+        <Link className="keyword-chip" key={keyword} to={keywordHref(keyword)}>
           {keyword}
-        </span>
+        </Link>
       ))}
     </div>
   );

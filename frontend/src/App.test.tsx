@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "./App";
@@ -80,8 +80,8 @@ const aoAshiHistory: PageHistoryEntry[] = [
     pageId: "page-1",
     version: 3,
     title: "Ao Ashi",
-    content: aoAshi.content,
-    keywords: aoAshi.keywords,
+    content: "# Sinopse\n\nAo Ashi acompanha **Ashito Aoi**.\n\n- Futebol\n- Base\n- Profissional",
+    keywords: ["manga", "futebol", "personagem"],
     editedByName: "Editor Final",
     changeSummary: "Ajuste de sinopse",
     createdAt: "2026-06-11T18:35:00",
@@ -90,8 +90,8 @@ const aoAshiHistory: PageHistoryEntry[] = [
     id: "history-2",
     pageId: "page-1",
     version: 2,
-    title: "Ao Ashi",
-    content: aoAshi.content,
+    title: "Ao Ashi Antigo",
+    content: "# Sinopse\n\nAo Ashi acompanha **Ashito Aoi**.\n\n- Futebol\n- Base\n- Juvenil",
     keywords: aoAshi.keywords,
     editedByName: "Pedro Araujo",
     changeSummary: "Complemento de personagens",
@@ -184,6 +184,45 @@ describe("Wiki Bol frontend", () => {
     expect(await screen.findByRole("link", { name: /ao ashi/i })).toBeInTheDocument();
   });
 
+  it("filters the listing from a keyword URL and keeps keyword chips navigable", async () => {
+    const fetchMock = mockFetchSequence([visitorResponse, { body: [summaries[0]] }, { body: summaries }]);
+    const actor = userEvent.setup();
+    goTo("/pages?keyword=manga");
+
+    render(<App />);
+
+    expect(await screen.findByRole("link", { name: /ao ashi/i })).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: /buscar paginas/i })).toHaveValue("manga");
+    expect(screen.getByText("Paginas com keyword: manga")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(`${API_BASE_URL}/api/pages/search?q=manga&limit=20`, {
+      credentials: "include",
+    });
+
+    expect(screen.getAllByRole("link", { name: /^manga$/i })[0]).toHaveAttribute("href", "/pages?keyword=manga");
+    await actor.clear(screen.getByRole("searchbox", { name: /buscar paginas/i }));
+    await actor.click(screen.getByRole("button", { name: /^buscar$/i }));
+
+    expect(await screen.findByText("Paginas recentes")).toBeInTheDocument();
+    expect(window.location.pathname).toBe("/pages");
+    expect(window.location.search).toBe("");
+  });
+
+  it("canonicalizes accented keyword chips before navigating to the filtered listing", async () => {
+    const legacyKeywordPage = { ...summaries[0], keywords: ["mangá", "futebol"] };
+    const fetchMock = mockFetchSequence([visitorResponse, { body: [legacyKeywordPage] }, { body: [legacyKeywordPage] }]);
+    goTo("/pages");
+
+    render(<App />);
+
+    expect(await screen.findByRole("link", { name: /^mangá$/i })).toHaveAttribute("href", "/pages?keyword=manga");
+    await userEvent.click(screen.getByRole("link", { name: /^mangá$/i }));
+
+    expect(await screen.findByText("Paginas com keyword: manga")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledWith(`${API_BASE_URL}/api/pages/search?q=manga&limit=20`, {
+      credentials: "include",
+    });
+  });
+
   it("renders markdown article content and visitor-safe actions", async () => {
     mockFetchSequence([visitorResponse, { body: aoAshi }, { body: aoAshiHistory }]);
     goTo("/pages/ao-ashi");
@@ -214,7 +253,8 @@ describe("Wiki Bol frontend", () => {
     expect(screen.getByText("ao-ashi")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /editar pagina/i })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /deletar pagina/i })).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /historico em breve/i })).toBeDisabled();
+    expect(screen.getByRole("link", { name: /^historico$/i })).toHaveAttribute("href", "/pages/ao-ashi/history");
+    expect(screen.getAllByRole("link", { name: /^manga$/i })[0]).toHaveAttribute("href", "/pages?keyword=manga");
   });
 
   it("keeps article readable when history loading fails", async () => {
@@ -253,6 +293,106 @@ describe("Wiki Bol frontend", () => {
       "/pages/ao-ashi/edit",
     );
     expect(screen.getByRole("button", { name: /deletar pagina/i })).toBeInTheDocument();
+  });
+
+  it("renders a dedicated history page with default inline comparison and preview", async () => {
+    mockFetchSequence([visitorResponse, { body: aoAshi }, { body: aoAshiHistory }]);
+    goTo("/pages/ao-ashi/history");
+
+    const { container } = render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Historico de Ao Ashi" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Breadcrumb")).toHaveTextContent("Wiki Bol/Ao Ashi/Historico");
+    expect(screen.getByRole("button", { name: /v3 ajuste de sinopse/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /v2 complemento de personagens/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/comparar de/i)).toHaveValue("2");
+    expect(screen.getByLabelText(/comparar com/i)).toHaveValue("3");
+    expect(screen.getByRole("heading", { name: /comparacao visual/i })).toBeInTheDocument();
+    expect(screen.getByText("Titulo alterado")).toBeInTheDocument();
+    expect(screen.getByText("Ao Ashi Antigo")).toBeInTheDocument();
+    expect(screen.getAllByText("Ao Ashi").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("personagem").length).toBeGreaterThan(0);
+    expect(screen.getByText("- Profissional")).toBeInTheDocument();
+    expect(screen.getByText("- Juvenil")).toBeInTheDocument();
+    expect(container.querySelector(".diff-line-added")).not.toBeNull();
+    expect(container.querySelector(".diff-line-removed")).not.toBeNull();
+    expect(screen.getByRole("heading", { name: /preview da versao v3/i })).toBeInTheDocument();
+    expect(screen.getByText("Profissional")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /restaurar versao/i })).not.toBeInTheDocument();
+  });
+
+  it("shows an unavailable comparison state when a page has only one version", async () => {
+    mockFetchSequence([visitorResponse, { body: aoAshi }, { body: [aoAshiHistory[0]] }]);
+    goTo("/pages/ao-ashi/history");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Historico de Ao Ashi" })).toBeInTheDocument();
+    expect(screen.getByText(/e necessario ter ao menos duas versoes/i)).toBeInTheDocument();
+  });
+
+  it("restores a selected version only after modal confirmation for the original author", async () => {
+    const fetchMock = mockFetchSequence([
+      { body: user },
+      { body: aoAshi },
+      { body: aoAshiHistory },
+      { body: { ...aoAshi, currentVersion: 4, updatedAt: "2026-06-12T09:00:00" } },
+    ]);
+    const actor = userEvent.setup();
+    goTo("/pages/ao-ashi/history");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Historico de Ao Ashi" });
+    expect(screen.getByText("Versao atual")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /restaurar versao v3/i })).not.toBeInTheDocument();
+
+    await actor.click(screen.getByRole("button", { name: /v2 complemento de personagens/i }));
+    expect(screen.queryByText("Versao atual")).not.toBeInTheDocument();
+    await actor.click(screen.getByRole("button", { name: /restaurar versao v2/i }));
+
+    const dialog = screen.getByRole("dialog", { name: /restaurar versao/i });
+    expect(within(dialog).getByText(/uma nova versao sera criada/i)).toBeInTheDocument();
+
+    await actor.click(within(dialog).getByRole("button", { name: /confirmar restore/i }));
+
+    await waitFor(() =>
+      expect(fetchMock).toHaveBeenCalledWith(
+        `${API_BASE_URL}/api/pages/page-1/history/2/restore`,
+        expect.objectContaining({ method: "POST", credentials: "include" }),
+      ),
+    );
+    expect(await screen.findByRole("heading", { name: "Ao Ashi" })).toBeInTheDocument();
+    expect(screen.getByText(/versao restaurada/i)).toBeInTheDocument();
+  });
+
+  it("keeps the history page visible when restore is rejected", async () => {
+    mockFetchSequence([
+      { body: admin },
+      { body: aoAshi },
+      { body: aoAshiHistory },
+      {
+        status: 403,
+        body: {
+          timestamp: "2026-06-11T10:00:00",
+          status: 403,
+          error: "Forbidden",
+          messages: ["Voce nao pode restaurar esta versao."],
+        },
+      },
+    ]);
+    const actor = userEvent.setup();
+    goTo("/pages/ao-ashi/history");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Historico de Ao Ashi" });
+    await actor.click(screen.getByRole("button", { name: /v2 complemento de personagens/i }));
+    await actor.click(screen.getByRole("button", { name: /restaurar versao v2/i }));
+    await actor.click(screen.getByRole("button", { name: /confirmar restore/i }));
+
+    expect(await screen.findByText("Voce nao pode restaurar esta versao.")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Historico de Ao Ashi" })).toBeInTheDocument();
   });
 
   it("logs out from the session panel and returns to visitor state", async () => {
@@ -330,6 +470,7 @@ describe("Wiki Bol frontend", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: /criar pagina/i });
+    expect(screen.getByRole("toolbar", { name: /ferramentas markdown/i })).toBeInTheDocument();
     await actor.click(screen.getByRole("button", { name: /salvar pagina/i }));
     expect(screen.getByText(/titulo e conteudo sao obrigatorios/i)).toBeInTheDocument();
 
@@ -400,12 +541,45 @@ describe("Wiki Bol frontend", () => {
     render(<App />);
 
     await screen.findByRole("heading", { name: /criar pagina/i });
+    const contentInput = screen.getByLabelText(/conteudo/i);
+    await actor.type(contentInput, "Inicio\nFim");
+    fireEvent.select(contentInput, { target: { selectionStart: 7, selectionEnd: 7 } });
+
     await actor.upload(
       screen.getByLabelText(/enviar imagem/i),
       new File(["image"], "capa.png", { type: "image/png" }),
     );
 
-    expect(await screen.findByDisplayValue(/!\[Capa\]\(https:\/\/example.com\/image.png\)/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(contentInput).toHaveValue("Inicio\n![Capa](https://example.com/image.png)\nFim"),
+    );
+  });
+
+  it("uses the markdown toolbar to insert formatting and toggle preview", async () => {
+    vi.spyOn(window, "prompt")
+      .mockReturnValueOnce("Site oficial")
+      .mockReturnValueOnce("https://example.com");
+    mockFetchSequence([{ body: user }]);
+    const actor = userEvent.setup();
+    goTo("/pages/new");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: /criar pagina/i });
+    const contentInput = screen.getByLabelText(/conteudo/i);
+
+    await actor.click(contentInput);
+    await actor.click(screen.getByRole("button", { name: /^negrito$/i }));
+    expect(contentInput).toHaveValue("**texto**");
+
+    await actor.click(screen.getByRole("button", { name: /^link$/i }));
+    expect(contentInput).toHaveValue("**texto**[Site oficial](https://example.com)");
+
+    await actor.click(screen.getByRole("button", { name: /^preview$/i }));
+    expect(screen.getByRole("heading", { name: /preview do artigo/i })).toBeInTheDocument();
+
+    await actor.click(screen.getByRole("button", { name: /^editor$/i }));
+    expect(contentInput).toBeInTheDocument();
   });
 
   it("deletes a page only after modal confirmation", async () => {
