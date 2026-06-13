@@ -67,6 +67,18 @@ type FormState = {
   changeSummary: string;
 };
 
+type TextSelection = {
+  start: number;
+  end: number;
+};
+
+type LinkModalState = {
+  isOpen: boolean;
+  text: string;
+  url: string;
+  error: string;
+};
+
 type DiffLine = {
   kind: "added" | "removed" | "unchanged";
   text: string;
@@ -971,6 +983,7 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
   const { slug } = useParams();
   const navigate = useNavigate();
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
+  const linkSelectionRef = useRef<TextSelection | null>(null);
   const [existingPage, setExistingPage] = useState<PageDetails | null>(null);
   const [form, setForm] = useState<FormState>({
     title: "",
@@ -984,6 +997,12 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
     mode === "edit" ? "loading" : "idle",
   );
   const [message, setMessage] = useState("");
+  const [linkModal, setLinkModal] = useState<LinkModalState>({
+    isOpen: false,
+    text: "",
+    url: "https://",
+    error: "",
+  });
 
   useEffect(() => {
     if (mode !== "edit" || !slug) {
@@ -1062,10 +1081,10 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
     };
   }
 
-  function insertContentAtCursor(insertedText: string) {
+  function insertContentAtCursor(insertedText: string, selection?: TextSelection | null) {
     const textarea = contentRef.current;
-    const start = textarea?.selectionStart ?? form.content.length;
-    const end = textarea?.selectionEnd ?? form.content.length;
+    const start = selection?.start ?? textarea?.selectionStart ?? form.content.length;
+    const end = selection?.end ?? textarea?.selectionEnd ?? form.content.length;
     const nextContent = `${form.content.slice(0, start)}${insertedText}${form.content.slice(end)}`;
     const nextCursor = start + insertedText.length;
 
@@ -1097,17 +1116,64 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
   }
 
   function handleLinkInsert() {
-    const text = window.prompt("Texto do link", "Site oficial");
+    const textarea = contentRef.current;
+    const start = textarea?.selectionStart ?? form.content.length;
+    const end = textarea?.selectionEnd ?? form.content.length;
+    const selectedText = form.content.slice(start, end);
+
+    linkSelectionRef.current = { start, end };
+    setLinkModal({
+      isOpen: true,
+      text: selectedText,
+      url: "https://",
+      error: "",
+    });
+  }
+
+  function updateLinkModal(field: "text" | "url", value: string) {
+    setLinkModal((current) => ({
+      ...current,
+      [field]: value,
+      error: "",
+    }));
+  }
+
+  function closeLinkModal() {
+    setLinkModal({
+      isOpen: false,
+      text: "",
+      url: "https://",
+      error: "",
+    });
+    linkSelectionRef.current = null;
+  }
+
+  function isValidLinkUrl(url: string) {
+    return url.startsWith("http://") || url.startsWith("https://") || url.startsWith("/") || url.startsWith("#");
+  }
+
+  function confirmLinkInsert() {
+    const text = linkModal.text.trim();
+    const url = linkModal.url.trim();
+
     if (!text) {
+      setLinkModal((current) => ({
+        ...current,
+        error: "Informe o texto do link.",
+      }));
       return;
     }
 
-    const url = window.prompt("URL do link", "https://");
-    if (!url) {
+    if (!url || !isValidLinkUrl(url)) {
+      setLinkModal((current) => ({
+        ...current,
+        error: "Use uma URL iniciando com http://, https://, / ou #.",
+      }));
       return;
     }
 
-    insertContentAtCursor(`[${text}](${url})`);
+    insertContentAtCursor(`[${text}](${url})`, linkSelectionRef.current);
+    closeLinkModal();
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -1276,6 +1342,16 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
           </div>
         </section>
       </form>
+
+      <LinkModal
+        isOpen={linkModal.isOpen}
+        text={linkModal.text}
+        url={linkModal.url}
+        error={linkModal.error}
+        onCancel={closeLinkModal}
+        onChange={updateLinkModal}
+        onConfirm={confirmLinkInsert}
+      />
     </section>
   );
 }
@@ -1328,6 +1404,60 @@ function InlineError({ message, onRetry }: { message: string; onRetry?: () => vo
         </button>
       ) : null}
     </section>
+  );
+}
+
+function LinkModal({
+  isOpen,
+  text,
+  url,
+  error,
+  onCancel,
+  onChange,
+  onConfirm,
+}: {
+  isOpen: boolean;
+  text: string;
+  url: string;
+  error: string;
+  onCancel: () => void;
+  onChange: (field: "text" | "url", value: string) => void;
+  onConfirm: () => void;
+}) {
+  if (!isOpen) {
+    return null;
+  }
+
+  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    onConfirm();
+  }
+
+  return (
+    <div className="modal-backdrop">
+      <section className="modal-panel" role="dialog" aria-modal="true" aria-label="Inserir link">
+        <h2>Inserir link</h2>
+        <form className="modal-form" onSubmit={handleSubmit}>
+          <label>
+            Texto do link
+            <input value={text} onChange={(event) => onChange("text", event.target.value)} autoFocus />
+          </label>
+          <label>
+            URL
+            <input value={url} onChange={(event) => onChange("url", event.target.value)} />
+          </label>
+          {error ? <p className="inline-error">{error}</p> : null}
+          <div className="modal-actions">
+            <button type="button" className="button secondary-button" onClick={onCancel}>
+              Cancelar
+            </button>
+            <button type="submit" className="button primary-button">
+              Inserir link
+            </button>
+          </div>
+        </form>
+      </section>
+    </div>
   );
 }
 

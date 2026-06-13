@@ -764,6 +764,12 @@ a:focus-visible {
   margin-bottom: 10px;
 }
 
+.modal-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
 .modal-actions {
   display: flex;
   justify-content: flex-end;

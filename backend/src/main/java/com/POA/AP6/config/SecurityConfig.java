@@ -8,6 +8,9 @@ import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import org.springframework.security.oauth2.client.registration.ClientRegistrationRepository;
+import org.springframework.security.oauth2.client.web.DefaultOAuth2AuthorizationRequestResolver;
+import org.springframework.security.oauth2.client.web.OAuth2AuthorizationRequestResolver;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -77,7 +80,9 @@ public class SecurityConfig {
 	}
 
 	@Bean
-	public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+	public SecurityFilterChain securityFilterChain(
+			HttpSecurity http,
+			ClientRegistrationRepository clientRegistrationRepository) throws Exception {
 		return http
 				.csrf(csrf -> csrf.disable())
 				.cors(Customizer.withDefaults())
@@ -102,6 +107,8 @@ public class SecurityConfig {
 							response.sendRedirect("/oauth2/authorization/google");
 						}))
 				.oauth2Login(oauth -> oauth
+						.authorizationEndpoint(authorization -> authorization
+								.authorizationRequestResolver(authorizationRequestResolver(clientRegistrationRepository)))
 						.successHandler((request, response, authentication) -> {
 							logger.info(
 									"OAuth login succeeded principal={} redirect={}",
@@ -123,6 +130,15 @@ public class SecurityConfig {
 								.oidcUserService(customOidcUserService)))
 				.logout(logout -> logout.logoutSuccessUrl("/"))
 				.build();
+	}
+
+	private OAuth2AuthorizationRequestResolver authorizationRequestResolver(
+			ClientRegistrationRepository clientRegistrationRepository) {
+		DefaultOAuth2AuthorizationRequestResolver resolver =
+				new DefaultOAuth2AuthorizationRequestResolver(clientRegistrationRepository, "/oauth2/authorization");
+		resolver.setAuthorizationRequestCustomizer(customizer -> customizer
+				.additionalParameters(parameters -> parameters.put("prompt", "select_account")));
+		return resolver;
 	}
 
 	@Bean

@@ -54,6 +54,7 @@ class OAuthAuthorizationRedirectTest {
 
 		assertThat(location).startsWith("https://accounts.google.com/o/oauth2/v2/auth?");
 		assertThat(location).contains("redirect_uri=https://wiki-bol-api.onrender.com/login/oauth2/code/google");
+		assertThat(location).contains("prompt=select_account");
 		assertThat(output).contains("OAuth request started path=/oauth2/authorization/google");
 		assertThat(output).contains("OAuth request completed path=/oauth2/authorization/google status=302");
 	}
@@ -72,6 +73,7 @@ class OAuthAuthorizationRedirectTest {
 
 		assertThat(location).startsWith("https://accounts.google.com/o/oauth2/v2/auth?");
 		assertThat(location).contains("redirect_uri=https://wiki-bol.testpedrobot.workers.dev/login/oauth2/code/google");
+		assertThat(location).contains("prompt=select_account");
 	}
 
 	@Test

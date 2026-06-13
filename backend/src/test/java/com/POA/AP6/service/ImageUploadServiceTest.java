@@ -1,5 +1,6 @@
 package com.POA.AP6.service;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -8,6 +9,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.header;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.method;
 import static org.springframework.test.web.client.match.MockRestRequestMatchers.requestTo;
+import static org.springframework.test.web.client.response.MockRestResponseCreators.withStatus;
 import static org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess;
 
 import com.POA.AP6.dto.ImageUploadResponse;
@@ -25,12 +27,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpMethod;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.client.MockRestServiceServer;
 import org.springframework.web.client.RestClient;
 
-@ExtendWith(MockitoExtension.class)
+@ExtendWith({MockitoExtension.class, OutputCaptureExtension.class})
 class ImageUploadServiceTest {
 	@Mock
 	private PageRepository pageRepository;
@@ -87,6 +92,27 @@ class ImageUploadServiceTest {
 		assertEquals("image/png", response.contentType());
 		assertEquals(file.getSize(), response.size());
 		assertEquals("![Minha imagem](" + response.url() + ")", response.markdown());
+		server.verify();
+	}
+
+	@Test
+	void uploadLogsSupabaseFailureWithoutLeakingServiceRoleKey(CapturedOutput output) {
+		MockMultipartFile file = new MockMultipartFile("file", "imagem.png", "image/png", pngBytes());
+		server.expect(requestTo(startsWith("https://example.supabase.co/storage/v1/object/wiki-images/uploads/" + user.getId() + "/")))
+				.andExpect(method(HttpMethod.POST))
+				.andRespond(withStatus(HttpStatus.FORBIDDEN).body("{\"message\":\"invalid signature\"}"));
+
+		BusinessRuleException exception = assertThrows(
+				BusinessRuleException.class,
+				() -> imageUploadService.upload(file, null, "Minha imagem", user));
+
+		assertEquals("Falha ao enviar imagem para o Supabase Storage.", exception.getMessage());
+		assertThat(output).contains("Supabase Storage upload failed status=403");
+		assertThat(output).contains("bucket=wiki-images");
+		assertThat(output).contains("contentType=image/png");
+		assertThat(output).contains("size=8");
+		assertThat(output).contains("responseBody={\"message\":\"invalid signature\"}");
+		assertThat(output).doesNotContain("test-service-role-key");
 		server.verify();
 	}
 

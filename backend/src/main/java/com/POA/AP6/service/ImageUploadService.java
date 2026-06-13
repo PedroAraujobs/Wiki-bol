@@ -17,6 +17,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientResponseException;
@@ -24,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 @Service
 public class ImageUploadService {
+	private static final Logger logger = LoggerFactory.getLogger(ImageUploadService.class);
 	private static final long MAX_FILE_SIZE = 5 * 1024 * 1024;
 	private static final Set<String> ALLOWED_CONTENT_TYPES = Set.of(
 			"image/png",
@@ -85,6 +88,14 @@ public class ImageUploadService {
 					.retrieve()
 					.toBodilessEntity();
 		} catch (RestClientResponseException exception) {
+			logger.warn(
+					"Supabase Storage upload failed status={} bucket={} path={} contentType={} size={} responseBody={}",
+					exception.getStatusCode().value(),
+					bucket,
+					path,
+					contentType,
+					file.getSize(),
+					exception.getResponseBodyAsString());
 			throw new BusinessRuleException("Falha ao enviar imagem para o Supabase Storage.");
 		}
 

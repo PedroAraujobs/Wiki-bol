@@ -556,9 +556,7 @@ describe("Wiki Bol frontend", () => {
   });
 
   it("uses the markdown toolbar to insert formatting and toggle preview", async () => {
-    vi.spyOn(window, "prompt")
-      .mockReturnValueOnce("Site oficial")
-      .mockReturnValueOnce("https://example.com");
+    const promptSpy = vi.spyOn(window, "prompt");
     mockFetchSequence([{ body: user }]);
     const actor = userEvent.setup();
     goTo("/pages/new");
@@ -573,13 +571,50 @@ describe("Wiki Bol frontend", () => {
     expect(contentInput).toHaveValue("**texto**");
 
     await actor.click(screen.getByRole("button", { name: /^link$/i }));
+    const linkDialog = screen.getByRole("dialog", { name: /inserir link/i });
+    await actor.clear(within(linkDialog).getByLabelText(/texto do link/i));
+    await actor.type(within(linkDialog).getByLabelText(/texto do link/i), "Site oficial");
+    await actor.clear(within(linkDialog).getByLabelText(/^url$/i));
+    await actor.type(within(linkDialog).getByLabelText(/^url$/i), "https://example.com");
+    await actor.click(within(linkDialog).getByRole("button", { name: /inserir link/i }));
     expect(contentInput).toHaveValue("**texto**[Site oficial](https://example.com)");
+    expect(promptSpy).not.toHaveBeenCalled();
 
     await actor.click(screen.getByRole("button", { name: /^preview$/i }));
     expect(screen.getByRole("heading", { name: /preview do artigo/i })).toBeInTheDocument();
 
     await actor.click(screen.getByRole("button", { name: /^editor$/i }));
     expect(contentInput).toBeInTheDocument();
+  });
+
+  it("prefills the link modal from the selected editor text and validates the URL", async () => {
+    mockFetchSequence([{ body: user }]);
+    const actor = userEvent.setup();
+    goTo("/pages/new");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: /criar pagina/i });
+    const contentInput = screen.getByLabelText(/conteudo/i);
+    await actor.type(contentInput, "Leia Ao Ashi");
+    fireEvent.select(contentInput, { target: { selectionStart: 5, selectionEnd: 12 } });
+
+    await actor.click(screen.getByRole("button", { name: /^link$/i }));
+    const linkDialog = screen.getByRole("dialog", { name: /inserir link/i });
+    expect(within(linkDialog).getByLabelText(/texto do link/i)).toHaveValue("Ao Ashi");
+
+    await actor.clear(within(linkDialog).getByLabelText(/^url$/i));
+    await actor.type(within(linkDialog).getByLabelText(/^url$/i), "example.com");
+    await actor.click(within(linkDialog).getByRole("button", { name: /inserir link/i }));
+    expect(await within(linkDialog).findByText(/use uma url iniciando/i)).toBeInTheDocument();
+    expect(contentInput).toHaveValue("Leia Ao Ashi");
+
+    await actor.clear(within(linkDialog).getByLabelText(/^url$/i));
+    await actor.type(within(linkDialog).getByLabelText(/^url$/i), "/pages/ao-ashi");
+    await actor.click(within(linkDialog).getByRole("button", { name: /inserir link/i }));
+
+    await waitFor(() => expect(screen.queryByRole("dialog", { name: /inserir link/i })).not.toBeInTheDocument());
+    expect(contentInput).toHaveValue("Leia [Ao Ashi](/pages/ao-ashi)");
   });
 
   it("deletes a page only after modal confirmation", async () => {
