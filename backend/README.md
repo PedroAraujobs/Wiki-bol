@@ -121,9 +121,13 @@ Deploy command: npx wrangler deploy
 
 Use `npx wrangler deploy` no campo `Deploy command`. O comando `npx wrangler versions upload` apenas cria uma versao/preview e nao aplica a versao no trafego de producao.
 
-O arquivo `frontend/wrangler.jsonc` aponta o deploy para `./dist` e configura fallback de SPA.
+O arquivo `frontend/wrangler.jsonc` aponta o deploy para `./dist`, cria o binding `ASSETS` e usa `frontend/src/worker.ts` para encaminhar `/api/*`, `/oauth2/*` e `/login/oauth2/*` ao backend no Render.
 
-O frontend tambem precisa da URL publica da API em `VITE_API_BASE_URL`. No Cloudflare Pages, isso deve ser uma variavel de ambiente do projeto.
+O frontend tambem precisa de `VITE_API_BASE_URL`. No Cloudflare Workers, use a propria URL do frontend para que o navegador enxergue API e UI no mesmo dominio:
+
+```text
+VITE_API_BASE_URL=https://wiki-bol.testpedrobot.workers.dev
+```
 
 ## Deploy no Render Free
 
@@ -159,7 +163,13 @@ SUPABASE_URL=https://ekmpdqbrldlfpzgnkndi.supabase.co
 SUPABASE_STORAGE_BUCKET=wiki-images
 ```
 
-Depois que o Render gerar a URL do backend, cadastre no Google OAuth:
+Depois que o Render gerar a URL do backend, cadastre no Google OAuth a URL publica do Worker:
+
+```text
+https://wiki-bol.testpedrobot.workers.dev/login/oauth2/code/google
+```
+
+Mantenha tambem, se quiser depurar diretamente no Render:
 
 ```text
 https://<render-service>.onrender.com/login/oauth2/code/google
@@ -168,7 +178,7 @@ https://<render-service>.onrender.com/login/oauth2/code/google
 Atualize tambem o frontend no Cloudflare:
 
 ```text
-VITE_API_BASE_URL=https://<render-service>.onrender.com
+VITE_API_BASE_URL=https://wiki-bol.testpedrobot.workers.dev
 ```
 
 ## Como testar

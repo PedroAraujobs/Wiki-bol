@@ -81,17 +81,19 @@ Root directory: backend
 Health check path: /api/health
 ```
 
-Depois que o Render gerar a URL publica da API, atualize o Cloudflare:
+Em producao, o Cloudflare Worker tambem atua como proxy da API. Atualize o Cloudflare com a propria URL publica do frontend:
 
 ```text
-VITE_API_BASE_URL=https://<render-service>.onrender.com
+VITE_API_BASE_URL=https://wiki-bol.testpedrobot.workers.dev
 ```
 
-Cadastre tambem o callback no Google OAuth:
+Cadastre tambem o callback publico no Google OAuth:
 
 ```text
-https://<render-service>.onrender.com/login/oauth2/code/google
+https://wiki-bol.testpedrobot.workers.dev/login/oauth2/code/google
 ```
+
+O Worker encaminha `/api/*`, `/oauth2/*` e `/login/oauth2/*` para o backend real no Render (`https://wiki-bol-api.onrender.com`).
 
 ## Autenticacao
 
