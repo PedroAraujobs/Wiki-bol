@@ -18,8 +18,11 @@ describe("Cloudflare worker API proxy", () => {
     "https://wiki-bol.testpedrobot.workers.dev/api/users/me",
     "https://wiki-bol.testpedrobot.workers.dev/oauth2/authorization/google",
     "https://wiki-bol.testpedrobot.workers.dev/login/oauth2/code/google",
+    "https://wiki-bol.testpedrobot.workers.dev/__worker/health",
   ])("proxies %s to the Render API", (url) => {
-    expect(shouldProxyToApi(new URL(url))).toBe(true);
+    const parsedUrl = new URL(url);
+
+    expect(shouldProxyToApi(parsedUrl) || parsedUrl.pathname === "/__worker/health").toBe(true);
   });
 
   it("keeps editorial frontend routes on static assets", () => {
@@ -49,6 +52,23 @@ describe("Cloudflare worker API proxy", () => {
     expect(response.headers.get("Cache-Control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({ status: "ok", proxy: "cloudflare-worker" });
     expect(env.ASSETS.fetch).not.toHaveBeenCalled();
+  });
+
+  it("serves the worker healthcheck for browser document navigations", async () => {
+    const response = await worker.fetch(
+      new Request("https://wiki-bol.testpedrobot.workers.dev/__worker/health", {
+        headers: {
+          Accept: "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+          "Sec-Fetch-Dest": "document",
+          "Sec-Fetch-Mode": "navigate",
+        },
+      }),
+      env,
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get("Content-Type")).toContain("application/json");
+    await expect(response.json()).resolves.toEqual({ status: "ok", proxy: "cloudflare-worker" });
   });
 
   it("adds a diagnostic header to proxied responses", async () => {
