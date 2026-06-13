@@ -30,7 +30,11 @@ Crie `frontend/.env` se quiser sobrescrever a URL da API:
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
-Em producao, defina `VITE_API_BASE_URL` com a URL publica real da API. Se o frontend estiver em Cloudflare Pages e o backend em outro host, o frontend precisa apontar para o backend publicado, nao para `localhost`.
+Em producao no Cloudflare Workers, defina `VITE_API_BASE_URL` com a propria URL do frontend. O Worker encaminha `/api/*`, `/oauth2/*` e `/login/oauth2/*` para o Render, mantendo o fluxo de cookies no mesmo dominio visivel ao navegador:
+
+```text
+VITE_API_BASE_URL=https://wiki-bol.testpedrobot.workers.dev
+```
 
 Para deploy em Cloudflare Pages:
 
@@ -50,7 +54,7 @@ Deploy command: npx wrangler deploy
 
 Use `npx wrangler deploy` no campo `Deploy command`. O comando `npx wrangler versions upload` apenas cria uma versao/preview e nao aplica a versao no trafego de producao.
 
-Nesse fluxo, o arquivo `frontend/wrangler.jsonc` publica `./dist` e usa `not_found_handling: "single-page-application"` para rotas do React. Nao adicione `_redirects` nesse modo, porque o Wrangler valida esse arquivo e pode bloquear o deploy por loop de redirect.
+Nesse fluxo, o arquivo `frontend/wrangler.jsonc` publica `./dist`, cria o binding `ASSETS` e usa `frontend/src/worker.ts` para proxy das rotas da API ao Render. Nao adicione `_redirects` nesse modo, porque o Wrangler valida esse arquivo e pode bloquear o deploy por loop de redirect.
 
 Instale dependencias e suba o Vite:
 
@@ -108,7 +112,13 @@ SUPABASE_URL=https://ekmpdqbrldlfpzgnkndi.supabase.co
 SUPABASE_STORAGE_BUCKET=wiki-images
 ```
 
-Depois que o Render gerar a URL do backend, cadastre no Google OAuth:
+Depois que o Render gerar a URL do backend, cadastre no Google OAuth a URL publica do Worker:
+
+```text
+https://wiki-bol.testpedrobot.workers.dev/login/oauth2/code/google
+```
+
+Mantenha tambem, se quiser depurar diretamente no Render:
 
 ```text
 https://<render-service>.onrender.com/login/oauth2/code/google
@@ -117,5 +127,5 @@ https://<render-service>.onrender.com/login/oauth2/code/google
 Atualize tambem o frontend no Cloudflare:
 
 ```text
-VITE_API_BASE_URL=https://<render-service>.onrender.com
+VITE_API_BASE_URL=https://wiki-bol.testpedrobot.workers.dev
 ```
