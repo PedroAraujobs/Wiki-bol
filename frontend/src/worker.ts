@@ -17,7 +17,14 @@ export function shouldProxyToApi(url: URL) {
 }
 
 function workerHealth() {
-  return Response.json({ status: "ok", proxy: PROXY_HEADER });
+  return Response.json(
+    { status: "ok", proxy: PROXY_HEADER },
+    {
+      headers: {
+        "Cache-Control": "no-store",
+      },
+    },
+  );
 }
 
 function missingApiOrigin() {
@@ -58,6 +65,7 @@ export function buildProxyRequest(request: Request, apiOrigin: string) {
 function withProxyHeader(response: Response) {
   const headers = new Headers(response.headers);
   headers.set("X-Wiki-Bol-Proxy", PROXY_HEADER);
+  headers.set("Cache-Control", "no-store");
 
   return new Response(response.body, {
     status: response.status,

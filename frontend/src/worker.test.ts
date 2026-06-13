@@ -46,6 +46,7 @@ describe("Cloudflare worker API proxy", () => {
     const response = await worker.fetch(new Request("https://wiki-bol.testpedrobot.workers.dev/__worker/health"), env);
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
     await expect(response.json()).resolves.toEqual({ status: "ok", proxy: "cloudflare-worker" });
     expect(env.ASSETS.fetch).not.toHaveBeenCalled();
   });
@@ -58,5 +59,6 @@ describe("Cloudflare worker API proxy", () => {
 
     expect(fetchMock).toHaveBeenCalledOnce();
     expect(response.headers.get("X-Wiki-Bol-Proxy")).toBe("cloudflare-worker");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
   });
 });
