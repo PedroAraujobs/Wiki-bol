@@ -123,10 +123,11 @@ Use `npx wrangler deploy` no campo `Deploy command`. O comando `npx wrangler ver
 
 O arquivo `frontend/wrangler.jsonc` aponta o deploy para `./dist`, cria o binding `ASSETS` e usa `frontend/src/worker.ts` para encaminhar `/api/*`, `/oauth2/*` e `/login/oauth2/*` ao backend no Render.
 
-O frontend tambem precisa de `VITE_API_BASE_URL`. No Cloudflare Workers, use a propria URL do frontend para que o navegador enxergue API e UI no mesmo dominio:
+O frontend tambem precisa de `VITE_API_BASE_URL`. No Cloudflare Workers, use `same-origin` para que o navegador enxergue API e UI no mesmo dominio. O Worker recebe `API_ORIGIN` e encaminha as rotas protegidas ao backend no Render:
 
 ```text
-VITE_API_BASE_URL=https://wiki-bol.testpedrobot.workers.dev
+VITE_API_BASE_URL=same-origin
+API_ORIGIN=https://wiki-bol-api.onrender.com
 ```
 
 ## Deploy no Render Free
@@ -178,7 +179,8 @@ https://<render-service>.onrender.com/login/oauth2/code/google
 Atualize tambem o frontend no Cloudflare:
 
 ```text
-VITE_API_BASE_URL=https://wiki-bol.testpedrobot.workers.dev
+VITE_API_BASE_URL=same-origin
+API_ORIGIN=https://wiki-bol-api.onrender.com
 ```
 
 ## Como testar

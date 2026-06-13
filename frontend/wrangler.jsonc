@@ -7,5 +7,8 @@
     "directory": "./dist",
     "binding": "ASSETS",
     "not_found_handling": "single-page-application"
+  },
+  "vars": {
+    "API_ORIGIN": "https://wiki-bol-api.onrender.com"
   }
 }

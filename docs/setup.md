@@ -30,10 +30,10 @@ Crie `frontend/.env` se quiser sobrescrever a URL da API:
 VITE_API_BASE_URL=http://localhost:8080
 ```
 
-Em producao no Cloudflare Workers, defina `VITE_API_BASE_URL` com a propria URL do frontend. O Worker encaminha `/api/*`, `/oauth2/*` e `/login/oauth2/*` para o Render, mantendo o fluxo de cookies no mesmo dominio visivel ao navegador:
+Em producao no Cloudflare Workers, defina `VITE_API_BASE_URL` como `same-origin`. O frontend passa a usar URLs relativas e o Worker encaminha `/api/*`, `/oauth2/*` e `/login/oauth2/*` para o Render, mantendo o fluxo de cookies no mesmo dominio visivel ao navegador:
 
 ```text
-VITE_API_BASE_URL=https://wiki-bol.testpedrobot.workers.dev
+VITE_API_BASE_URL=same-origin
 ```
 
 Para deploy em Cloudflare Pages:
@@ -54,7 +54,7 @@ Deploy command: npx wrangler deploy
 
 Use `npx wrangler deploy` no campo `Deploy command`. O comando `npx wrangler versions upload` apenas cria uma versao/preview e nao aplica a versao no trafego de producao.
 
-Nesse fluxo, o arquivo `frontend/wrangler.jsonc` publica `./dist`, cria o binding `ASSETS` e usa `frontend/src/worker.ts` para proxy das rotas da API ao Render. Nao adicione `_redirects` nesse modo, porque o Wrangler valida esse arquivo e pode bloquear o deploy por loop de redirect.
+Nesse fluxo, o arquivo `frontend/wrangler.jsonc` publica `./dist`, cria o binding `ASSETS`, define `API_ORIGIN=https://wiki-bol-api.onrender.com` e usa `frontend/src/worker.ts` para proxy das rotas da API ao Render. Nao adicione `_redirects` nesse modo, porque o Wrangler valida esse arquivo e pode bloquear o deploy por loop de redirect.
 
 Instale dependencias e suba o Vite:
 
@@ -127,5 +127,12 @@ https://<render-service>.onrender.com/login/oauth2/code/google
 Atualize tambem o frontend no Cloudflare:
 
 ```text
-VITE_API_BASE_URL=https://wiki-bol.testpedrobot.workers.dev
+VITE_API_BASE_URL=same-origin
+API_ORIGIN=https://wiki-bol-api.onrender.com
+```
+
+Depois do deploy, valide o Worker:
+
+```text
+https://wiki-bol.testpedrobot.workers.dev/__worker/health
 ```
