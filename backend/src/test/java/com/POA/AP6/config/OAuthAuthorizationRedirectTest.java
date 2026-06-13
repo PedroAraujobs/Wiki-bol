@@ -59,6 +59,22 @@ class OAuthAuthorizationRedirectTest {
 	}
 
 	@Test
+	void googleAuthorizationStartUsesForwardedCloudflareHostForSameOriginProxy() throws Exception {
+		String location = mockMvc
+				.perform(get("/oauth2/authorization/google")
+						.header("Host", "wiki-bol-api.onrender.com")
+						.header("X-Forwarded-Proto", "https")
+						.header("X-Forwarded-Host", "wiki-bol.testpedrobot.workers.dev"))
+				.andExpect(status().isFound())
+				.andReturn()
+				.getResponse()
+				.getHeader("Location");
+
+		assertThat(location).startsWith("https://accounts.google.com/o/oauth2/v2/auth?");
+		assertThat(location).contains("redirect_uri=https://wiki-bol.testpedrobot.workers.dev/login/oauth2/code/google");
+	}
+
+	@Test
 	void invalidGoogleCallbackRedirectsToFrontendAndLogsFailure(CapturedOutput output) throws Exception {
 		String location = mockMvc
 				.perform(get("/login/oauth2/code/google")

@@ -13,4 +13,12 @@ describe("api client URLs", () => {
 
     expect(getGoogleLoginUrl()).toBe("https://wiki-bol-api.onrender.com/oauth2/authorization/google");
   });
+
+  it("uses relative URLs when the API base URL is same-origin", async () => {
+    vi.stubEnv("VITE_API_BASE_URL", "same-origin");
+
+    const { getGoogleLoginUrl } = await import("./api");
+
+    expect(getGoogleLoginUrl()).toBe("/oauth2/authorization/google");
+  });
 });
