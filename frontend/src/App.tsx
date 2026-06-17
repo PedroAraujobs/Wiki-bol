@@ -1,5 +1,5 @@
 import { FormEvent, createContext, useContext, useEffect, useRef, useState } from "react";
-import ReactMarkdown from "react-markdown";
+import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import {
   BrowserRouter,
   Link,
@@ -79,6 +79,12 @@ type LinkModalState = {
   error: string;
 };
 
+type PendingImage = {
+  blobUrl: string;
+  file: File;
+  alt: string;
+};
+
 type DiffLine = {
   kind: "added" | "removed" | "unchanged";
   text: string;
@@ -109,6 +115,10 @@ const KEYWORD_ALIASES: Record<string, string> = {
   saga: "arco",
   sagas: "arco",
 };
+
+function markdownUrlTransform(url: string) {
+  return url.startsWith("blob:") ? url : defaultUrlTransform(url);
+}
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
@@ -984,6 +994,7 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
   const navigate = useNavigate();
   const contentRef = useRef<HTMLTextAreaElement | null>(null);
   const linkSelectionRef = useRef<TextSelection | null>(null);
+  const pendingImagesRef = useRef<PendingImage[]>([]);
   const [existingPage, setExistingPage] = useState<PageDetails | null>(null);
   const [form, setForm] = useState<FormState>({
     title: "",
@@ -1003,6 +1014,7 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
     url: "https://",
     error: "",
   });
+  const [pendingImages, setPendingImages] = useState<PendingImage[]>([]);
 
   useEffect(() => {
     if (mode !== "edit" || !slug) {
@@ -1043,6 +1055,17 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
     };
   }, [mode, slug]);
 
+  useEffect(() => {
+    pendingImagesRef.current = pendingImages;
+  }, [pendingImages]);
+
+  useEffect(() => {
+    return () => {
+      pendingImagesRef.current.forEach((image) => URL.revokeObjectURL(image.blobUrl));
+      pendingImagesRef.current = [];
+    };
+  }, []);
+
   if (!user) {
     return (
       <EmptyState
@@ -1078,6 +1101,40 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
       content: form.content.trim(),
       keywords: normalizeKeywords(form.keywords),
       changeSummary: form.changeSummary.trim() || (mode === "create" ? "Criacao da pagina" : "Edicao da pagina"),
+    };
+  }
+
+  function imageAltFromFilename(filename: string) {
+    return filename.replace(/\.[^.]+$/, "").trim() || "imagem";
+  }
+
+  function replaceAll(value: string, search: string, replacement: string) {
+    return value.split(search).join(replacement);
+  }
+
+  function revokePendingImages(images: PendingImage[]) {
+    if (images.length === 0) {
+      return;
+    }
+
+    const revokedBlobUrls = new Set(images.map((image) => image.blobUrl));
+    images.forEach((image) => URL.revokeObjectURL(image.blobUrl));
+    pendingImagesRef.current = pendingImagesRef.current.filter((image) => !revokedBlobUrls.has(image.blobUrl));
+    setPendingImages((current) => current.filter((image) => !revokedBlobUrls.has(image.blobUrl)));
+  }
+
+  async function uploadReferencedPendingImages(content: string) {
+    const referencedImages = pendingImagesRef.current.filter((image) => content.includes(image.blobUrl));
+    let resolvedContent = content;
+
+    for (const image of referencedImages) {
+      const uploadedImage = await uploadImage(image.file, image.alt, existingPage?.id);
+      resolvedContent = replaceAll(resolvedContent, image.blobUrl, uploadedImage.url);
+    }
+
+    return {
+      content: resolvedContent,
+      uploadedImages: referencedImages,
     };
   }
 
@@ -1189,11 +1246,17 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
 
     try {
       const payload = buildPayload();
+      const resolvedImages = await uploadReferencedPendingImages(payload.content);
+      const resolvedPayload = {
+        ...payload,
+        content: resolvedImages.content,
+      };
       const savedPage =
         mode === "create"
-          ? await createPage(payload)
-          : await updatePage(existingPage?.id ?? "", payload);
+          ? await createPage(resolvedPayload)
+          : await updatePage(existingPage?.id ?? "", resolvedPayload);
 
+      revokePendingImages(pendingImagesRef.current);
       navigate(`/pages/${savedPage.slug}`, { state: { page: savedPage } });
     } catch (error) {
       setMessage(getErrorMessage(error));
@@ -1208,9 +1271,14 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
 
     setMessage("Enviando imagem...");
     try {
-      const image = await uploadImage(file, file.name.replace(/\.[^.]+$/, ""), existingPage?.id);
-      insertContentAtCursor(`${image.markdown}\n`);
-      setMessage("Imagem inserida no editor.");
+      const alt = imageAltFromFilename(file.name);
+      const blobUrl = URL.createObjectURL(file);
+      const pendingImage = { blobUrl, file, alt };
+
+      pendingImagesRef.current = [...pendingImagesRef.current, pendingImage];
+      setPendingImages(pendingImagesRef.current);
+      insertContentAtCursor(`![${alt}](${blobUrl})\n`);
+      setMessage("Imagem adicionada ao preview. O upload sera feito ao salvar.");
     } catch (error) {
       setMessage(getErrorMessage(error));
     }
@@ -1338,7 +1406,9 @@ function PageEditorPage({ mode }: { mode: EditorMode }) {
           <p className="eyebrow">Preview</p>
           <h2>Preview do artigo</h2>
           <div className="markdown-body">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>{form.content || "Preencha o conteudo para visualizar."}</ReactMarkdown>
+            <ReactMarkdown remarkPlugins={[remarkGfm]} urlTransform={markdownUrlTransform}>
+              {form.content || "Preencha o conteudo para visualizar."}
+            </ReactMarkdown>
           </div>
         </section>
       </form>

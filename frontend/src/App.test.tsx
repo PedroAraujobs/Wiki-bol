@@ -522,23 +522,21 @@ describe("Wiki Bol frontend", () => {
     );
   });
 
-  it("uploads an image and inserts the returned markdown in the editor", async () => {
-    mockFetchSequence([
-      { body: user },
-      {
-        body: {
-          url: "https://example.com/image.png",
-          markdown: "![Capa](https://example.com/image.png)",
-          path: "pages/image.png",
-          contentType: "image/png",
-          size: 1234,
-        },
+  it("adds an image locally for preview without uploading immediately", async () => {
+    const createObjectURL = vi.fn(() => "blob:http://localhost/capa");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal(
+      "URL",
+      class extends URL {
+        static createObjectURL = createObjectURL;
+        static revokeObjectURL = revokeObjectURL;
       },
-    ]);
+    );
+    const fetchMock = mockFetchSequence([{ body: user }]);
     const actor = userEvent.setup();
     goTo("/pages/new");
 
-    render(<App />);
+    const { unmount } = render(<App />);
 
     await screen.findByRole("heading", { name: /criar pagina/i });
     const contentInput = screen.getByLabelText(/conteudo/i);
@@ -550,9 +548,184 @@ describe("Wiki Bol frontend", () => {
       new File(["image"], "capa.png", { type: "image/png" }),
     );
 
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
     await waitFor(() =>
-      expect(contentInput).toHaveValue("Inicio\n![Capa](https://example.com/image.png)\nFim"),
+      expect(contentInput).toHaveValue("Inicio\n![capa](blob:http://localhost/capa)\nFim"),
     );
+    await actor.click(screen.getByRole("button", { name: /^preview$/i }));
+    expect(screen.getByRole("img", { name: "capa" })).toHaveAttribute("src", "blob:http://localhost/capa");
+
+    unmount();
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:http://localhost/capa");
+  });
+
+  it("uploads pending images before creating a page and saves markdown with public URLs", async () => {
+    const createObjectURL = vi.fn(() => "blob:http://localhost/capa");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal(
+      "URL",
+      class extends URL {
+        static createObjectURL = createObjectURL;
+        static revokeObjectURL = revokeObjectURL;
+      },
+    );
+    const fetchMock = mockFetchSequence([
+      { body: user },
+      {
+        body: {
+          url: "https://example.com/image.png",
+          markdown: "![capa](https://example.com/image.png)",
+          path: "uploads/image.png",
+          contentType: "image/png",
+          size: 1234,
+        },
+      },
+      {
+        status: 201,
+        body: {
+          ...aoAshi,
+          id: "created-page",
+          title: "Blue Lock",
+          slug: "blue-lock",
+          content: "# Blue Lock\n![capa](https://example.com/image.png)",
+          keywords: ["manga"],
+          currentVersion: 1,
+        },
+      },
+    ]);
+    const actor = userEvent.setup();
+    goTo("/pages/new");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: /criar pagina/i });
+    await actor.type(screen.getByLabelText(/titulo/i), "Blue Lock");
+    const contentInput = screen.getByLabelText(/conteudo/i);
+    await actor.type(contentInput, "# Blue Lock\n");
+    await actor.upload(
+      screen.getByLabelText(/enviar imagem/i),
+      new File(["image"], "capa.png", { type: "image/png" }),
+    );
+    await actor.click(screen.getByRole("button", { name: /salvar pagina/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(3));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `${API_BASE_URL}/api/uploads/images`,
+      expect.objectContaining({ method: "POST", credentials: "include", body: expect.any(FormData) }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      `${API_BASE_URL}/api/pages`,
+      expect.objectContaining({
+        method: "POST",
+        credentials: "include",
+        body: JSON.stringify({
+          title: "Blue Lock",
+          content: "# Blue Lock\n![capa](https://example.com/image.png)",
+          keywords: [],
+          changeSummary: "Criacao da pagina",
+        }),
+      }),
+    );
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:http://localhost/capa");
+  });
+
+  it("does not save the page when a pending image upload fails", async () => {
+    vi.stubGlobal(
+      "URL",
+      class extends URL {
+        static createObjectURL = vi.fn(() => "blob:http://localhost/capa");
+        static revokeObjectURL = vi.fn();
+      },
+    );
+    const fetchMock = mockFetchSequence([
+      { body: user },
+      {
+        status: 400,
+        body: {
+          timestamp: "2026-06-17T10:00:00",
+          status: 400,
+          error: "Bad Request",
+          messages: ["Falha ao enviar imagem para o Supabase Storage."],
+        },
+      },
+    ]);
+    const actor = userEvent.setup();
+    goTo("/pages/new");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: /criar pagina/i });
+    await actor.type(screen.getByLabelText(/titulo/i), "Blue Lock");
+    await actor.type(screen.getByLabelText(/conteudo/i), "# Blue Lock\n");
+    await actor.upload(
+      screen.getByLabelText(/enviar imagem/i),
+      new File(["image"], "capa.png", { type: "image/png" }),
+    );
+    await actor.click(screen.getByRole("button", { name: /salvar pagina/i }));
+
+    expect(await screen.findByText("Falha ao enviar imagem para o Supabase Storage.")).toBeInTheDocument();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      `${API_BASE_URL}/api/pages`,
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("does not upload a pending image removed from content before saving", async () => {
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal(
+      "URL",
+      class extends URL {
+        static createObjectURL = vi.fn(() => "blob:http://localhost/capa");
+        static revokeObjectURL = revokeObjectURL;
+      },
+    );
+    const fetchMock = mockFetchSequence([
+      { body: user },
+      {
+        status: 201,
+        body: {
+          ...aoAshi,
+          id: "created-page",
+          title: "Blue Lock",
+          slug: "blue-lock",
+          content: "# Blue Lock",
+          keywords: [],
+          currentVersion: 1,
+        },
+      },
+    ]);
+    const actor = userEvent.setup();
+    goTo("/pages/new");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: /criar pagina/i });
+    await actor.type(screen.getByLabelText(/titulo/i), "Blue Lock");
+    const contentInput = screen.getByLabelText(/conteudo/i);
+    await actor.type(contentInput, "# Blue Lock\n");
+    await actor.upload(
+      screen.getByLabelText(/enviar imagem/i),
+      new File(["image"], "capa.png", { type: "image/png" }),
+    );
+    await actor.clear(contentInput);
+    await actor.type(contentInput, "# Blue Lock");
+    await actor.click(screen.getByRole("button", { name: /salvar pagina/i }));
+
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      `${API_BASE_URL}/api/pages`,
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).not.toHaveBeenCalledWith(
+      `${API_BASE_URL}/api/uploads/images`,
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:http://localhost/capa");
   });
 
   it("uses the markdown toolbar to insert formatting and toggle preview", async () => {
