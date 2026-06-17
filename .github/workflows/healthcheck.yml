@@ -1,0 +1,77 @@
+name: Healthcheck
+
+on:
+  schedule:
+    - cron: "0 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  healthcheck:
+    name: ${{ matrix.target.name }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - name: Cloudflare proxy healthcheck
+            url: https://wiki-bol.testpedrobot.workers.dev/api/health
+          - name: Render backend healthcheck
+            url: https://wiki-bol-api.onrender.com/api/health
+
+    steps:
+      - name: Call healthcheck endpoint
+        env:
+          HEALTHCHECK_NAME: ${{ matrix.target.name }}
+          HEALTHCHECK_URL: ${{ matrix.target.url }}
+        run: |
+          set -euo pipefail
+
+          body_file="$(mktemp)"
+          http_code="$(
+            curl \
+              --silent \
+              --show-error \
+              --location \
+              --max-time 120 \
+              --connect-timeout 15 \
+              --output "${body_file}" \
+              --write-out "%{http_code}" \
+              "${HEALTHCHECK_URL}"
+          )"
+
+          echo "${HEALTHCHECK_NAME} returned HTTP ${http_code}"
+
+          if [[ ! "${http_code}" =~ ^2[0-9][0-9]$ ]]; then
+            echo "Healthcheck failed for ${HEALTHCHECK_URL}"
+            cat "${body_file}"
+            exit 1
+          fi
+
+          node - "${body_file}" "${HEALTHCHECK_NAME}" <<'NODE'
+          const fs = require("node:fs");
+
+          const [bodyPath, name] = process.argv.slice(2);
+          const body = fs.readFileSync(bodyPath, "utf8");
+
+          let payload;
+          try {
+            payload = JSON.parse(body);
+          } catch (error) {
+            console.error(`${name} returned invalid JSON.`);
+            console.error(body);
+            process.exit(1);
+          }
+
+          if (payload.status !== "ok") {
+            console.error(`${name} returned an unexpected payload.`);
+            console.error(JSON.stringify(payload));
+            process.exit(1);
+          }
+
+          console.log(`${name} is healthy.`);
+          NODE
