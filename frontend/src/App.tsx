@@ -916,7 +916,7 @@ function ArticlePage() {
           {canDelete ? (
             <button type="button" className="button danger-button" onClick={() => setIsDeleteOpen(true)}>
               <Trash2 aria-hidden="true" size={16} />
-              Deletar pagina
+              Deletar página
             </button>
           ) : null}
         </div>
@@ -966,12 +966,12 @@ function ArticlePage() {
 
       <ConfirmModal
         isOpen={isDeleteOpen}
-        title="Deletar pagina"
+        title="Deletar página"
         confirmLabel={isDeleting ? "Deletando..." : "Confirmar delete"}
         onCancel={() => setIsDeleteOpen(false)}
         onConfirm={() => void handleDelete()}
       >
-        Tem certeza que quer deletar essa página
+        Tem certeza que quer deletar essa página?
       </ConfirmModal>
     </article>
   );

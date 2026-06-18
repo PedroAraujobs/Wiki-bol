@@ -458,7 +458,7 @@ describe("Wiki-bol frontend", () => {
     expect(screen.getByText("Slug permanente")).toBeInTheDocument();
     expect(screen.getByText("ao-ashi")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /editar pagina/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /deletar pagina/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /deletar página/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^historico$/i })).toHaveAttribute("href", "/pages/ao-ashi/history");
     expect(screen.getAllByRole("link", { name: /^manga$/i })[0]).toHaveAttribute("href", "/pages?keyword=manga");
   });
@@ -498,7 +498,7 @@ describe("Wiki-bol frontend", () => {
       "href",
       "/pages/ao-ashi/edit",
     );
-    expect(screen.getByRole("button", { name: /deletar pagina/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /deletar página/i })).toBeInTheDocument();
   });
 
   it("renders a dedicated history page with default inline comparison and preview", async () => {
@@ -1009,8 +1009,8 @@ describe("Wiki-bol frontend", () => {
 
     render(<App />);
 
-    await actor.click(await screen.findByRole("button", { name: /deletar pagina/i }));
-    const dialog = screen.getByRole("dialog", { name: /deletar pagina/i });
+    await actor.click(await screen.findByRole("button", { name: /deletar página/i }));
+    const dialog = screen.getByRole("dialog", { name: /deletar página/i });
     expect(within(dialog).getByText(/tem certeza que quer deletar essa página/i)).toBeInTheDocument();
 
     await actor.click(within(dialog).getByRole("button", { name: /confirmar delete/i }));
