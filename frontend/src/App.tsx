@@ -762,7 +762,8 @@ function PageResult({ page }: { page: PageSummary }) {
     <Link className="page-result" to={`/pages/${page.slug}`}>
       <span className="result-media" aria-hidden={!hasValidCover}>
         <img
-          src={hasValidCover ? transformedCoverUrl : "/brand/favicon-64.png"}
+          className={hasValidCover ? undefined : "catalog-fallback-image"}
+          src={hasValidCover ? transformedCoverUrl : "/brand/catalog-fallback.png"}
           alt={hasValidCover ? page.coverImageAlt?.trim() || `Capa de ${page.title}` : ""}
           loading="lazy"
           onError={hasValidCover ? () => setHasImageError(true) : undefined}

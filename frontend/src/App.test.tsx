@@ -456,16 +456,20 @@ describe("Wiki-bol frontend", () => {
       name: /ao ashi e a longa jornada do futebol de base japones/i,
     });
     const cover = within(coveredCard).getByRole("img", { name: "Ashito Aoi em campo" });
+    expect(cover).not.toHaveClass("catalog-fallback-image");
     fireEvent.error(cover);
-    expect(coveredCard.querySelector("img")).toHaveAttribute("src", "/brand/favicon-64.png");
+    expect(coveredCard.querySelector("img")).toHaveAttribute("src", "/brand/catalog-fallback.png");
     expect(coveredCard.querySelector("img")).toHaveAttribute("alt", "");
+    expect(coveredCard.querySelector("img")).toHaveClass("catalog-fallback-image");
 
     const noCoverCard = screen.getByRole("link", { name: /^esperion/i });
-    expect(noCoverCard.querySelector("img")).toHaveAttribute("src", "/brand/favicon-64.png");
+    expect(noCoverCard.querySelector("img")).toHaveAttribute("src", "/brand/catalog-fallback.png");
+    expect(noCoverCard.querySelector("img")).toHaveClass("catalog-fallback-image");
     expect(within(noCoverCard).queryByText("…")).not.toBeInTheDocument();
 
     const unsafeCoverCard = screen.getByRole("link", { name: /^pagina sem keywords/i });
-    expect(unsafeCoverCard.querySelector("img")).toHaveAttribute("src", "/brand/favicon-64.png");
+    expect(unsafeCoverCard.querySelector("img")).toHaveAttribute("src", "/brand/catalog-fallback.png");
+    expect(unsafeCoverCard.querySelector("img")).toHaveClass("catalog-fallback-image");
     expect(within(unsafeCoverCard).queryByLabelText("Keywords")).not.toBeInTheDocument();
   });
 
