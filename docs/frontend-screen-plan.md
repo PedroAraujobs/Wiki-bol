@@ -1,6 +1,6 @@
 # Plano de Telas e Direcao Visual do Frontend
 
-Este documento registra a direcao visual da Wiki Bol, o estado das telas principais ja implementadas e os proximos fluxos prioritarios para evoluir a wiki.
+Este documento registra o estado das telas principais e os proximos fluxos prioritarios da Wiki-bol. A especificacao visual vigente, incluindo marca, tokens, temas e responsividade, esta em [`visual-identity.md`](visual-identity.md).
 
 ## Contexto analisado
 
@@ -46,6 +46,8 @@ Evitar:
 
 ### Paleta de cores
 
+> A paleta abaixo registra a direcao inicial do projeto. Os tokens implementados e as escalas finais estao em [`visual-identity.md`](visual-identity.md).
+
 Tema claro recomendado:
 
 | Uso | Cor | HEX |
@@ -65,7 +67,7 @@ Tema claro recomendado:
 | Aviso | Ambar contido | `#9A6A1E` |
 | Erro | Vermelho contido | `#B42318` |
 
-Tema escuro opcional, nao necessario para a primeira entrega:
+Tema escuro implementado e documentado:
 
 | Uso | Cor | HEX |
 | --- | --- | --- |
@@ -78,7 +80,7 @@ Tema escuro opcional, nao necessario para a primeira entrega:
 | Acao primaria | `#7BA7D9` |
 | Acento futebol | `#80B58B` |
 
-Recomendacao: implementar primeiro apenas o modo claro. O modo escuro pode entrar depois se houver tempo para revisar contraste e leitura de Markdown.
+O modo escuro usa tokens proprios, preferencia persistida e revisao de contraste; nao e uma inversao automatica do tema claro.
 
 ### Tipografia
 
@@ -131,9 +133,10 @@ Layout atual/recomendado:
 
 Componentes:
 
-- Logo textual `Wiki Bol`, sem simbolo pesado.
+- Logo horizontal oficial `Wiki-bol` na sidebar e simbolo isolado no cabecalho mobile.
 - Busca global.
-- Links: `Inicio`, `Todas as paginas`, `Criar pagina`, `Categorias`.
+- Links: `Todas as paginas` e `Criar pagina`.
+- Secao `Visto recentemente` com ate cinco artigos abertos, armazenada localmente por identidade do usuario.
 - Bloco de sessao: visitante, nome do usuario, role e acao de login/logout quando disponivel.
 - Barra de status discreta para loading e erro global.
 
@@ -451,26 +454,21 @@ Icones:
 
 Recomendacoes:
 
-- Comecar com busca global e lista recente.
-- Transformar keywords em chips clicaveis no proximo ciclo de navegacao.
-- Manter categorias/tipos de pagina como convencao editorial ate existir suporte de dados mais forte.
+- Manter busca global, keywords clicaveis e a lista local `Visto recentemente` como caminhos principais de exploracao.
+- Tratar tipos de pagina como convencao editorial de keywords, sem criar uma arvore de categorias na navegacao.
 - Cada artigo deve sugerir caminhos: keywords, paginas relacionadas futuras e historico.
-- Evitar menus profundos. Wikis crescem melhor com busca, categorias claras e links internos consistentes.
+- Evitar menus profundos. Wikis crescem melhor com busca, taxonomia consistente e links internos.
 
 Estrutura inicial sugerida:
 
 ```text
-Inicio
 Todas as paginas
-Categorias
-  Mangas
-  Personagens
-  Times
-  Partidas
-  Autores
-  Arcos
 Criar pagina
+Visto recentemente
+  Ate cinco paginas abertas
 ```
+
+O historico recente fica restrito ao navegador atual, usa listas separadas para visitante e usuario autenticado e nao sincroniza entre dispositivos.
 
 ## Acessibilidade e legibilidade
 
@@ -496,8 +494,8 @@ Mobile:
 
 Modo escuro:
 
-- Nao implementar automaticamente sem revisao de contraste.
-- Se entrar depois, criar tokens de tema e testar Markdown, tags, tabelas e estados de erro.
+- Usar os tokens de tema definidos em [`visual-identity.md`](visual-identity.md).
+- Testar Markdown, tags, tabelas, diffs, formularios e estados sem depender apenas de cor.
 
 ## Sequencia recomendada de implementacao
 
@@ -533,7 +531,7 @@ Essa ordem reduz risco porque primeiro estabiliza navegacao, sessao e contrato p
 ## Exemplo de pagina tipica
 
 ```text
-Wiki Bol / Ao Ashi
+Wiki-bol / Ao Ashi
 
 Ao Ashi
 

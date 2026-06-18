@@ -1,4 +1,4 @@
-import { FormEvent, createContext, useContext, useEffect, useRef, useState } from "react";
+import { FormEvent, createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
 import ReactMarkdown, { defaultUrlTransform } from "react-markdown";
 import {
   BrowserRouter,
@@ -16,6 +16,7 @@ import remarkGfm from "remark-gfm";
 import {
   Bold,
   Edit3,
+  FileText,
   Heading1,
   History,
   ImagePlus,
@@ -24,11 +25,16 @@ import {
   List,
   LogIn,
   LogOut,
+  Menu,
+  Monitor,
+  Moon,
   Plus,
   RotateCcw,
   Save,
   Search,
+  Sun,
   Trash2,
+  X,
 } from "lucide-react";
 import {
   ApiRequestError,
@@ -55,7 +61,19 @@ import {
 
 type SessionContextValue = {
   user: CurrentUser | null;
+  recentPages: RecentPage[];
+  recordRecentPage: (page: Pick<PageDetails, "id" | "title" | "slug">) => void;
+  removeRecentPage: (slug: string) => void;
 };
+
+type RecentPage = {
+  id: string;
+  title: string;
+  slug: string;
+  viewedAt: string;
+};
+
+type ThemePreference = "system" | "light" | "dark";
 
 type EditorMode = "create" | "edit";
 
@@ -115,6 +133,61 @@ const KEYWORD_ALIASES: Record<string, string> = {
   saga: "arco",
   sagas: "arco",
 };
+
+const THEME_STORAGE_KEY = "wiki-bol-theme";
+const RECENT_PAGES_STORAGE_PREFIX = "wiki-bol-recent-pages:";
+const RECENT_PAGES_LIMIT = 5;
+
+function getRecentPagesStorageKey(user: CurrentUser | null) {
+  return `${RECENT_PAGES_STORAGE_PREFIX}${user?.id ?? "guest"}`;
+}
+
+function isRecentPage(value: unknown): value is RecentPage {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as Partial<RecentPage>;
+  return [candidate.id, candidate.title, candidate.slug, candidate.viewedAt].every(
+    (field) => typeof field === "string" && field.length > 0,
+  );
+}
+
+function readRecentPages(storageKey: string) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(storageKey) ?? "[]");
+
+    if (!Array.isArray(parsed)) {
+      throw new Error("Invalid recent pages payload");
+    }
+
+    const uniquePages = new Map<string, RecentPage>();
+    parsed
+      .filter(isRecentPage)
+      .sort((first, second) => Date.parse(second.viewedAt) - Date.parse(first.viewedAt))
+      .forEach((page) => {
+        if (!uniquePages.has(page.id)) {
+          uniquePages.set(page.id, page);
+        }
+      });
+
+    const recentPages = Array.from(uniquePages.values()).slice(0, RECENT_PAGES_LIMIT);
+    localStorage.setItem(storageKey, JSON.stringify(recentPages));
+    return recentPages;
+  } catch {
+    localStorage.setItem(storageKey, "[]");
+    return [];
+  }
+}
+
+function writeRecentPages(storageKey: string, recentPages: RecentPage[]) {
+  localStorage.setItem(storageKey, JSON.stringify(recentPages));
+}
+
+function getInitialThemePreference(): ThemePreference {
+  const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+  return storedTheme === "light" || storedTheme === "dark" || storedTheme === "system" ? storedTheme : "system";
+}
 
 function markdownUrlTransform(url: string) {
   return url.startsWith("blob:") ? url : defaultUrlTransform(url);
@@ -245,10 +318,55 @@ function App() {
 
 function AppLayout() {
   const [user, setUser] = useState<CurrentUser | null>(null);
+  const [recentPages, setRecentPages] = useState<RecentPage[]>(() =>
+    readRecentPages(getRecentPagesStorageKey(null)),
+  );
   const [isLoadingSession, setIsLoadingSession] = useState(true);
   const [sessionError, setSessionError] = useState<string | null>(null);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const [themePreference, setThemePreference] = useState<ThemePreference>(getInitialThemePreference);
+  const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
+  const menuButtonRef = useRef<HTMLButtonElement | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
+  const recentPagesStorageKey = getRecentPagesStorageKey(user);
+
+  useEffect(() => {
+    const colorScheme = window.matchMedia("(prefers-color-scheme: dark)");
+
+    function applyTheme() {
+      const resolvedTheme = themePreference === "system" ? (colorScheme.matches ? "dark" : "light") : themePreference;
+      document.documentElement.dataset.theme = resolvedTheme;
+      document.documentElement.style.colorScheme = resolvedTheme;
+    }
+
+    applyTheme();
+    if (themePreference === "system") {
+      colorScheme.addEventListener("change", applyTheme);
+    }
+
+    return () => colorScheme.removeEventListener("change", applyTheme);
+  }, [themePreference]);
+
+  useEffect(() => {
+    setIsMobileNavOpen(false);
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!isMobileNavOpen) {
+      return;
+    }
+
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") {
+        setIsMobileNavOpen(false);
+        menuButtonRef.current?.focus();
+      }
+    }
+
+    document.addEventListener("keydown", closeOnEscape);
+    return () => document.removeEventListener("keydown", closeOnEscape);
+  }, [isMobileNavOpen]);
 
   useEffect(() => {
     let isActive = true;
@@ -278,6 +396,35 @@ function AppLayout() {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isLoadingSession) {
+      setRecentPages(readRecentPages(recentPagesStorageKey));
+    }
+  }, [isLoadingSession, recentPagesStorageKey]);
+
+  const recordRecentPage = useCallback(
+    (page: Pick<PageDetails, "id" | "title" | "slug">) => {
+      const currentPages = readRecentPages(recentPagesStorageKey);
+      const nextPages = [
+        { id: page.id, title: page.title, slug: page.slug, viewedAt: new Date().toISOString() },
+        ...currentPages.filter((recentPage) => recentPage.id !== page.id),
+      ].slice(0, RECENT_PAGES_LIMIT);
+
+      writeRecentPages(recentPagesStorageKey, nextPages);
+      setRecentPages(nextPages);
+    },
+    [recentPagesStorageKey],
+  );
+
+  const removeRecentPage = useCallback(
+    (slug: string) => {
+      const nextPages = readRecentPages(recentPagesStorageKey).filter((recentPage) => recentPage.slug !== slug);
+      writeRecentPages(recentPagesStorageKey, nextPages);
+      setRecentPages(nextPages);
+    },
+    [recentPagesStorageKey],
+  );
+
   async function handleLogout() {
     setIsLoggingOut(true);
     setSessionError(null);
@@ -293,28 +440,36 @@ function AppLayout() {
     }
   }
 
+  function selectTheme(preference: ThemePreference) {
+    setThemePreference(preference);
+    localStorage.setItem(THEME_STORAGE_KEY, preference);
+  }
+
   return (
-    <SessionContext.Provider value={{ user }}>
+    <SessionContext.Provider value={{ user, recentPages, recordRecentPage, removeRecentPage }}>
       <div className="app-frame">
         <aside className="app-sidebar" aria-label="Navegacao principal">
-          <div className="brand-block">
-            <Link to="/pages" className="brand-link">
-              Wiki Bol
-            </Link>
-            <p>Base editorial sobre mangas de futebol.</p>
-          </div>
-
-          <nav className="primary-nav">
-            <NavLink to="/pages">Todas as paginas</NavLink>
-            <NavLink to="/pages/new">Criar pagina</NavLink>
-            <button type="button" disabled>
-              Categorias em breve
-            </button>
-          </nav>
+          <NavigationContent themePreference={themePreference} onSelectTheme={selectTheme} />
         </aside>
 
         <div className="app-content">
           <header className="top-session-bar" aria-label="Sessao do usuario">
+            <div className="mobile-brand-controls">
+              <button
+                ref={menuButtonRef}
+                type="button"
+                className="icon-button menu-button"
+                aria-label="Abrir menu"
+                aria-expanded={isMobileNavOpen}
+                aria-controls="mobile-navigation"
+                onClick={() => setIsMobileNavOpen(true)}
+              >
+                <Menu aria-hidden="true" size={20} />
+              </button>
+              <Link className="mobile-brand-link" to="/pages" aria-label="Inicio da Wiki-bol">
+                <img src="/brand/wiki-bol-symbol.png" alt="" />
+              </Link>
+            </div>
             <SessionStatus
               user={user}
               isLoadingSession={isLoadingSession}
@@ -325,11 +480,119 @@ function AppLayout() {
           </header>
 
           <main className="app-main">
-            {isLoadingSession ? <LoadingState label="Carregando wiki..." /> : <Outlet />}
+            <div className="app-main-inner">
+              {isLoadingSession ? <LoadingState label="Carregando wiki..." /> : <Outlet />}
+            </div>
           </main>
         </div>
+
+        {isMobileNavOpen ? (
+          <div className="mobile-navigation-layer">
+            <button
+              type="button"
+              className="mobile-navigation-backdrop"
+              aria-label="Fechar menu"
+              onClick={() => {
+                setIsMobileNavOpen(false);
+                menuButtonRef.current?.focus();
+              }}
+            />
+            <aside id="mobile-navigation" className="mobile-navigation" aria-label="Navegacao mobile">
+              <button
+                type="button"
+                className="icon-button mobile-navigation-close"
+                aria-label="Fechar navegacao"
+                onClick={() => {
+                  setIsMobileNavOpen(false);
+                  menuButtonRef.current?.focus();
+                }}
+              >
+                <X aria-hidden="true" size={20} />
+              </button>
+              <NavigationContent themePreference={themePreference} onSelectTheme={selectTheme} />
+            </aside>
+          </div>
+        ) : null}
       </div>
     </SessionContext.Provider>
+  );
+}
+
+function NavigationContent({
+  themePreference,
+  onSelectTheme,
+}: {
+  themePreference: ThemePreference;
+  onSelectTheme: (preference: ThemePreference) => void;
+}) {
+  const { recentPages } = useSession();
+
+  return (
+    <>
+      <div className="brand-block">
+        <Link to="/pages" className="brand-link">
+          <img src="/brand/wiki-bol-logo.png" alt="Wiki-bol" />
+        </Link>
+        <p>Base editorial sobre mangas de futebol.</p>
+      </div>
+
+      <nav className="primary-nav">
+        <NavLink to="/pages">Todas as paginas</NavLink>
+        <NavLink to="/pages/new">Criar pagina</NavLink>
+      </nav>
+
+      <section className="recent-pages-section" aria-label="Visto recentemente">
+        <h2>Visto recentemente</h2>
+        {recentPages.length > 0 ? (
+          <div className="recent-pages-list">
+            {recentPages.map((page) => (
+              <Link key={page.id} className="recent-page-link" to={`/pages/${page.slug}`} title={page.title}>
+                <FileText aria-hidden="true" size={16} />
+                <span>{page.title}</span>
+              </Link>
+            ))}
+          </div>
+        ) : (
+          <p className="recent-pages-empty">Nenhuma pagina vista.</p>
+        )}
+      </section>
+
+      <ThemeSelector preference={themePreference} onSelect={onSelectTheme} />
+    </>
+  );
+}
+
+function ThemeSelector({
+  preference,
+  onSelect,
+}: {
+  preference: ThemePreference;
+  onSelect: (preference: ThemePreference) => void;
+}) {
+  const options = [
+    { value: "system" as const, label: "Usar tema do sistema", icon: Monitor },
+    { value: "light" as const, label: "Usar tema claro", icon: Sun },
+    { value: "dark" as const, label: "Usar tema escuro", icon: Moon },
+  ];
+
+  return (
+    <div className="theme-selector" role="group" aria-label="Tema da interface">
+      {options.map((option) => {
+        const Icon = option.icon;
+        return (
+          <button
+            key={option.value}
+            type="button"
+            aria-label={option.label}
+            aria-pressed={preference === option.value}
+            title={option.label}
+            onClick={() => onSelect(option.value)}
+          >
+            <Icon aria-hidden="true" size={17} />
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
@@ -506,7 +769,7 @@ function PageResult({ page }: { page: PageSummary }) {
 }
 
 function ArticlePage() {
-  const { user } = useSession();
+  const { user, recordRecentPage, removeRecentPage } = useSession();
   const { slug } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -533,12 +796,14 @@ function ArticlePage() {
         const result = await getPageBySlug(pageSlug);
 
         if (isActive) {
+          recordRecentPage(result);
           setPage(result);
           setStatus("ready");
         }
       } catch (error) {
         if (isActive) {
           if (error instanceof ApiRequestError && error.status === 404) {
+            removeRecentPage(pageSlug);
             setStatus("not-found");
             setMessage("Pagina nao encontrada.");
           } else {
@@ -554,7 +819,13 @@ function ArticlePage() {
     return () => {
       isActive = false;
     };
-  }, [slug, statePage]);
+  }, [removeRecentPage, slug, statePage]);
+
+  useEffect(() => {
+    if (status === "ready" && page && statePage?.slug === page.slug) {
+      recordRecentPage(statePage);
+    }
+  }, [page, recordRecentPage, statePage, status]);
 
   useEffect(() => {
     if (!page?.id) {
@@ -625,7 +896,7 @@ function ArticlePage() {
     <article className="article-layout">
       <header className="article-header">
         <nav className="breadcrumb" aria-label="Breadcrumb">
-          <Link to="/pages">Wiki Bol</Link>
+          <Link to="/pages">Wiki-bol</Link>
           <span>/</span>
           <span>{page.title}</span>
         </nav>
@@ -700,7 +971,7 @@ function ArticlePage() {
         onCancel={() => setIsDeleteOpen(false)}
         onConfirm={() => void handleDelete()}
       >
-        Essa acao remove a pagina da listagem publica. O backend mantem a remocao logica e somente autor ou ADMIN pode executar.
+        Tem certeza que quer deletar essa página
       </ConfirmModal>
     </article>
   );
@@ -813,7 +1084,7 @@ function PageHistoryPage() {
       <header className="screen-header">
         <div>
           <nav className="breadcrumb" aria-label="Breadcrumb">
-            <Link to="/pages">Wiki Bol</Link>
+            <Link to="/pages">Wiki-bol</Link>
             <span>/</span>
             <Link to={`/pages/${page.slug}`}>{page.title}</Link>
             <span>/</span>

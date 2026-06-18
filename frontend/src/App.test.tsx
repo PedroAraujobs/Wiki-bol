@@ -99,6 +99,13 @@ const aoAshiHistory: PageHistoryEntry[] = [
   },
 ];
 
+const recentAoAshi = {
+  id: aoAshi.id,
+  title: aoAshi.title,
+  slug: aoAshi.slug,
+  viewedAt: "2026-06-11T18:30:00.000Z",
+};
+
 type MockResponse = {
   status?: number;
   body?: unknown;
@@ -126,9 +133,38 @@ function goTo(path: string) {
   window.history.pushState({}, "", path);
 }
 
-describe("Wiki Bol frontend", () => {
+function mockColorScheme(initialDarkMode = false) {
+  let isDarkMode = initialDarkMode;
+  const listeners = new Set<(event: MediaQueryListEvent) => void>();
+  const mediaQuery = {
+    get matches() {
+      return isDarkMode;
+    },
+    media: "(prefers-color-scheme: dark)",
+    onchange: null,
+    addEventListener: vi.fn((_event: string, listener: (event: MediaQueryListEvent) => void) => listeners.add(listener)),
+    removeEventListener: vi.fn((_event: string, listener: (event: MediaQueryListEvent) => void) => listeners.delete(listener)),
+    addListener: vi.fn(),
+    removeListener: vi.fn(),
+    dispatchEvent: vi.fn(),
+  } as MediaQueryList;
+
+  vi.stubGlobal("matchMedia", vi.fn(() => mediaQuery));
+
+  return {
+    setDarkMode(nextDarkMode: boolean) {
+      isDarkMode = nextDarkMode;
+      listeners.forEach((listener) => listener({ matches: nextDarkMode, media: mediaQuery.media } as MediaQueryListEvent));
+    },
+  };
+}
+
+describe("Wiki-bol frontend", () => {
   beforeEach(() => {
     goTo("/");
+    localStorage.clear();
+    document.documentElement.removeAttribute("data-theme");
+    mockColorScheme();
   });
 
   afterEach(() => {
@@ -154,6 +190,176 @@ describe("Wiki Bol frontend", () => {
     expect(await screen.findByRole("link", { name: /ao ashi/i })).toBeInTheDocument();
     expect(screen.getByText(/Pedro Araujo/)).toBeInTheDocument();
     expect(screen.getByText("v3")).toBeInTheDocument();
+    expect(within(navigation).getByRole("heading", { name: "Visto recentemente" })).toBeInTheDocument();
+    expect(within(navigation).getByText("Nenhuma pagina vista.")).toBeInTheDocument();
+    expect(within(navigation).queryByText("Categorias em breve")).not.toBeInTheDocument();
+  });
+
+  it("records a successfully loaded article for the visitor and shows it in both navigation surfaces", async () => {
+    mockFetchSequence([visitorResponse, { body: aoAshi }, { body: aoAshiHistory }]);
+    goTo("/pages/ao-ashi");
+    const actor = userEvent.setup();
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Ao Ashi" });
+    const navigation = screen.getByLabelText("Navegacao principal");
+    expect(within(navigation).getByRole("link", { name: "Ao Ashi" })).toHaveAttribute("href", "/pages/ao-ashi");
+    expect(JSON.parse(localStorage.getItem("wiki-bol-recent-pages:guest") ?? "[]")).toEqual([
+      expect.objectContaining({ id: "page-1", title: "Ao Ashi", slug: "ao-ashi", viewedAt: expect.any(String) }),
+    ]);
+
+    await actor.click(screen.getByRole("button", { name: "Abrir menu" }));
+    const mobileNavigation = screen.getByLabelText("Navegacao mobile");
+    expect(within(mobileNavigation).getByRole("link", { name: "Ao Ashi" })).toHaveAttribute(
+      "href",
+      "/pages/ao-ashi",
+    );
+  });
+
+  it("moves a revisited page to the top, deduplicates it and keeps only five recent pages", async () => {
+    localStorage.setItem(
+      "wiki-bol-recent-pages:guest",
+      JSON.stringify([
+        { id: "page-2", title: "Blue Lock", slug: "blue-lock", viewedAt: "2026-06-11T18:29:00.000Z" },
+        { id: "page-3", title: "Inazuma Eleven", slug: "inazuma-eleven", viewedAt: "2026-06-11T18:28:00.000Z" },
+        recentAoAshi,
+        { id: "page-4", title: "Esperion", slug: "esperion", viewedAt: "2026-06-11T18:26:00.000Z" },
+        { id: "page-5", title: "Ashito Aoi", slug: "ashito-aoi", viewedAt: "2026-06-11T18:25:00.000Z" },
+      ]),
+    );
+    mockFetchSequence([visitorResponse, { body: aoAshi }, { body: aoAshiHistory }]);
+    goTo("/pages/ao-ashi");
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: "Ao Ashi" });
+    await waitFor(() => {
+      const stored = JSON.parse(localStorage.getItem("wiki-bol-recent-pages:guest") ?? "[]");
+      expect(stored).toHaveLength(5);
+      expect(stored[0]).toEqual(expect.objectContaining({ id: "page-1", slug: "ao-ashi" }));
+      expect(stored.filter((entry: { id: string }) => entry.id === "page-1")).toHaveLength(1);
+    });
+  });
+
+  it("uses separate recent lists for an authenticated user and the guest after logout", async () => {
+    localStorage.setItem("wiki-bol-recent-pages:guest", JSON.stringify([recentAoAshi]));
+    localStorage.setItem(
+      "wiki-bol-recent-pages:user-1",
+      JSON.stringify([
+        { id: "page-2", title: "Blue Lock", slug: "blue-lock", viewedAt: "2026-06-11T18:31:00.000Z" },
+      ]),
+    );
+    mockFetchSequence([
+      { body: user },
+      { body: [] },
+      { status: 200, body: { message: "Logout realizado com sucesso." } },
+    ]);
+    goTo("/pages");
+    const actor = userEvent.setup();
+
+    render(<App />);
+
+    const navigation = await screen.findByLabelText("Navegacao principal");
+    expect(await within(navigation).findByRole("link", { name: "Blue Lock" })).toBeInTheDocument();
+    expect(within(navigation).queryByRole("link", { name: "Ao Ashi" })).not.toBeInTheDocument();
+
+    await actor.click(screen.getByRole("button", { name: /^sair$/i }));
+    expect(await within(navigation).findByRole("link", { name: "Ao Ashi" })).toBeInTheDocument();
+    expect(within(navigation).queryByRole("link", { name: "Blue Lock" })).not.toBeInTheDocument();
+  });
+
+  it("recovers from invalid recent data without breaking the shell", async () => {
+    localStorage.setItem("wiki-bol-recent-pages:guest", "not-json");
+    mockFetchSequence([visitorResponse, { body: [] }]);
+    goTo("/pages");
+
+    render(<App />);
+
+    const navigation = await screen.findByLabelText("Navegacao principal");
+    expect(within(navigation).getByText("Nenhuma pagina vista.")).toBeInTheDocument();
+    expect(localStorage.getItem("wiki-bol-recent-pages:guest")).toBe("[]");
+  });
+
+  it("removes a recent page when its article returns 404", async () => {
+    localStorage.setItem("wiki-bol-recent-pages:guest", JSON.stringify([recentAoAshi]));
+    mockFetchSequence([
+      visitorResponse,
+      {
+        status: 404,
+        body: {
+          timestamp: "2026-06-11T10:00:00",
+          status: 404,
+          error: "Not Found",
+          messages: ["Pagina nao encontrada."],
+        },
+      },
+    ]);
+    goTo("/pages/ao-ashi");
+
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "Pagina nao encontrada" })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(JSON.parse(localStorage.getItem("wiki-bol-recent-pages:guest") ?? "[]")).toEqual([]),
+    );
+  });
+
+  it("renders the official brand assets and accessible name", async () => {
+    mockFetchSequence([visitorResponse, { body: summaries }]);
+    goTo("/pages");
+
+    render(<App />);
+
+    const navigation = await screen.findByLabelText("Navegacao principal");
+    expect(within(navigation).getByRole("img", { name: "Wiki-bol" })).toHaveAttribute(
+      "src",
+      "/brand/wiki-bol-logo.png",
+    );
+    expect(screen.getByRole("link", { name: "Wiki-bol" })).toHaveAttribute("href", "/pages");
+  });
+
+  it("uses the system theme by default and persists an explicit preference", async () => {
+    const colorScheme = mockColorScheme(false);
+    mockFetchSequence([visitorResponse, { body: summaries }]);
+    goTo("/pages");
+    const actor = userEvent.setup();
+
+    render(<App />);
+
+    await screen.findByRole("link", { name: /ao ashi/i });
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    expect(screen.getByRole("button", { name: "Usar tema do sistema" })).toHaveAttribute("aria-pressed", "true");
+
+    colorScheme.setDarkMode(true);
+    await waitFor(() => expect(document.documentElement).toHaveAttribute("data-theme", "dark"));
+
+    await actor.click(screen.getByRole("button", { name: "Usar tema claro" }));
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+    expect(localStorage.getItem("wiki-bol-theme")).toBe("light");
+
+    colorScheme.setDarkMode(true);
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+  });
+
+  it("opens and closes the mobile navigation accessibly", async () => {
+    mockFetchSequence([visitorResponse, { body: summaries }]);
+    goTo("/pages");
+    const actor = userEvent.setup();
+
+    render(<App />);
+
+    await screen.findByRole("link", { name: /ao ashi/i });
+    const menuButton = screen.getByRole("button", { name: "Abrir menu" });
+    expect(menuButton).toHaveAttribute("aria-expanded", "false");
+
+    await actor.click(menuButton);
+    expect(menuButton).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: "Fechar menu" })).toBeInTheDocument();
+
+    await actor.keyboard("{Escape}");
+    expect(menuButton).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("button", { name: "Fechar menu" })).not.toBeInTheDocument();
   });
 
   it("searches pages and returns to the full listing when the query is cleared", async () => {
@@ -302,7 +508,7 @@ describe("Wiki Bol frontend", () => {
     const { container } = render(<App />);
 
     expect(await screen.findByRole("heading", { name: "Historico de Ao Ashi" })).toBeInTheDocument();
-    expect(screen.getByLabelText("Breadcrumb")).toHaveTextContent("Wiki Bol/Ao Ashi/Historico");
+    expect(screen.getByLabelText("Breadcrumb")).toHaveTextContent("Wiki-bol/Ao Ashi/Historico");
     expect(screen.getByRole("button", { name: /v3 ajuste de sinopse/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /v2 complemento de personagens/i })).toBeInTheDocument();
     expect(screen.getByLabelText(/comparar de/i)).toHaveValue("2");
@@ -805,7 +1011,7 @@ describe("Wiki Bol frontend", () => {
 
     await actor.click(await screen.findByRole("button", { name: /deletar pagina/i }));
     const dialog = screen.getByRole("dialog", { name: /deletar pagina/i });
-    expect(within(dialog).getByText(/essa acao remove a pagina da listagem publica/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/tem certeza que quer deletar essa página/i)).toBeInTheDocument();
 
     await actor.click(within(dialog).getByRole("button", { name: /confirmar delete/i }));
 
