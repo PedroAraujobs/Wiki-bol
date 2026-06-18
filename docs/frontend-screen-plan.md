@@ -161,7 +161,7 @@ Riscos:
 
 ### 2. Tela de listagem e busca de paginas
 
-Status: implementada; proximo incremento e transformar keywords em filtros clicaveis.
+Status: implementada com busca, navegacao por keyword e apresentacao responsiva.
 
 Objetivo:
 
@@ -170,8 +170,9 @@ Permitir que o usuario encontre paginas por titulo, slug, keyword ou conteudo, u
 Layout recomendado:
 
 - Campo de busca no topo da area principal ou logo abaixo do cabecalho.
-- Lista em linhas densas, nao cards grandes.
-- Cada resultado deve mostrar titulo, resumo curto quando houver, keywords, autor, versao e data de atualizacao.
+- Desktop: grid responsivo de cards com primeira imagem do Markdown, titulo e ate tres keywords.
+- Mobile: lista compacta sem imagem, mantendo o card inteiro como link.
+- Autor, versao e data ficam fora do catalogo e permanecem nas informacoes editoriais do artigo.
 - Filtros por tipo de conteudo podem ser preparados visualmente, mas sem prometer backend inexistente.
 
 Estados:
@@ -202,7 +203,7 @@ Plano de testes antes da implementacao:
 
 - Busca vazia chama listagem.
 - Busca com termo chama endpoint de search com `limit=20`.
-- Exibe resultados com titulo, keywords, autor e data formatada.
+- Exibe resultados com titulo, ate tres keywords e capa/fallback no desktop.
 - Mostra estado vazio quando o array vem vazio.
 - Mostra erro quando a API falha.
 

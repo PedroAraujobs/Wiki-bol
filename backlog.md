@@ -11,6 +11,7 @@ Plano detalhado das telas de alta prioridade e direcao visual: [`docs/frontend-s
 - Shell editorial com navegacao lateral, area de sessao no topo, login Google e logout.
 - Secao `Visto recentemente` na sidebar, persistida localmente e separada entre visitante e usuario autenticado.
 - Listagem e busca de paginas com estados de loading, vazio e erro.
+- Catalogo responsivo com cards ilustrados no desktop, lista compacta no mobile e capas derivadas do Markdown.
 - Leitura de artigo com Markdown, breadcrumbs, tags, acoes contextuais e rodape editorial.
 - Criacao e edicao de paginas com preview Markdown, upload de imagem e slug imutavel na edicao.
 - Editor Markdown com toolbar assistida, insercao no cursor e abas editor/preview em mobile.

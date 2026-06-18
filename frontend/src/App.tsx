@@ -537,7 +537,7 @@ function NavigationContent({
       </div>
 
       <nav className="primary-nav">
-        <NavLink to="/pages">Todas as paginas</NavLink>
+        <NavLink to="/pages" end>Todas as paginas</NavLink>
         <NavLink to="/pages/new">Criar pagina</NavLink>
       </nav>
 
@@ -753,18 +753,41 @@ function PageListPage() {
 }
 
 function PageResult({ page }: { page: PageSummary }) {
+  const [hasImageError, setHasImageError] = useState(false);
+  const transformedCoverUrl = page.coverImageUrl ? defaultUrlTransform(page.coverImageUrl) : "";
+  const hasValidCover = Boolean(transformedCoverUrl) && !hasImageError;
+  const visibleKeywords = page.keywords.slice(0, 3);
+
   return (
-    <article className="page-result">
-      <Link className="result-title" to={`/pages/${page.slug}`}>
-        {page.title}
-      </Link>
-      <span className="result-meta">
-        <span>v{page.currentVersion}</span>
-        <span>{page.authorName}</span>
-        <span>{formatDate(page.updatedAt)}</span>
+    <Link className="page-result" to={`/pages/${page.slug}`}>
+      <span className="result-media" aria-hidden={!hasValidCover}>
+        <img
+          src={hasValidCover ? transformedCoverUrl : "/brand/favicon-64.png"}
+          alt={hasValidCover ? page.coverImageAlt?.trim() || `Capa de ${page.title}` : ""}
+          loading="lazy"
+          onError={hasValidCover ? () => setHasImageError(true) : undefined}
+        />
       </span>
-      <KeywordRow keywords={page.keywords} />
-    </article>
+      <span className="result-content">
+        <span className="result-title" title={page.title}>
+          {page.title}
+        </span>
+        {visibleKeywords.length > 0 ? (
+          <span className="catalog-keywords" aria-label="Keywords">
+            {visibleKeywords.map((keyword) => (
+              <span key={keyword} className="keyword-chip">
+                {keyword}
+              </span>
+            ))}
+            {page.keywords.length > visibleKeywords.length ? (
+              <span className="keyword-overflow" aria-label="Mais keywords">
+                {"\u2026"}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+      </span>
+    </Link>
   );
 }
 
@@ -916,7 +939,7 @@ function ArticlePage() {
           {canDelete ? (
             <button type="button" className="button danger-button" onClick={() => setIsDeleteOpen(true)}>
               <Trash2 aria-hidden="true" size={16} />
-              Deletar pagina
+              Deletar página
             </button>
           ) : null}
         </div>
@@ -966,12 +989,12 @@ function ArticlePage() {
 
       <ConfirmModal
         isOpen={isDeleteOpen}
-        title="Deletar pagina"
+        title="Deletar página"
         confirmLabel={isDeleting ? "Deletando..." : "Confirmar delete"}
         onCancel={() => setIsDeleteOpen(false)}
         onConfirm={() => void handleDelete()}
       >
-        Tem certeza que quer deletar essa página
+        Tem certeza que quer deletar essa página?
       </ConfirmModal>
     </article>
   );

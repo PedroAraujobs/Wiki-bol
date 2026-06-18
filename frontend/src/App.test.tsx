@@ -55,6 +55,30 @@ const summaries: PageSummary[] = [
   },
 ];
 
+const catalogSummaries = [
+  {
+    ...summaries[0],
+    title: "Ao Ashi e a longa jornada do futebol de base japones",
+    keywords: ["manga", "futebol", "personagem", "esperion"],
+    coverImageUrl: "https://example.com/ao-ashi-cover.jpg",
+    coverImageAlt: "Ashito Aoi em campo",
+  },
+  {
+    ...summaries[1],
+    coverImageUrl: null,
+    coverImageAlt: null,
+  },
+  {
+    ...summaries[1],
+    id: "page-3",
+    title: "Pagina sem keywords",
+    slug: "sem-keywords",
+    keywords: [],
+    coverImageUrl: "javascript:alert('invalid')",
+    coverImageAlt: "Imagem insegura",
+  },
+] as PageSummary[];
+
 const aoAshi: PageDetails = {
   id: "page-1",
   title: "Ao Ashi",
@@ -188,8 +212,8 @@ describe("Wiki-bol frontend", () => {
       `${API_BASE_URL}/oauth2/authorization/google`,
     );
     expect(await screen.findByRole("link", { name: /ao ashi/i })).toBeInTheDocument();
-    expect(screen.getByText(/Pedro Araujo/)).toBeInTheDocument();
-    expect(screen.getByText("v3")).toBeInTheDocument();
+    expect(screen.queryByText(/Pedro Araujo/)).not.toBeInTheDocument();
+    expect(screen.queryByText("v3")).not.toBeInTheDocument();
     expect(within(navigation).getByRole("heading", { name: "Visto recentemente" })).toBeInTheDocument();
     expect(within(navigation).getByText("Nenhuma pagina vista.")).toBeInTheDocument();
     expect(within(navigation).queryByText("Categorias em breve")).not.toBeInTheDocument();
@@ -362,6 +386,89 @@ describe("Wiki-bol frontend", () => {
     expect(screen.queryByRole("button", { name: "Fechar menu" })).not.toBeInTheDocument();
   });
 
+  it("marks only the exact sidebar destination as active on the create page", async () => {
+    mockFetchSequence([{ body: user }]);
+    goTo("/pages/new");
+    const actor = userEvent.setup();
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: /criar pagina/i });
+    const navigation = screen.getByLabelText("Navegacao principal");
+    expect(within(navigation).getByRole("link", { name: "Todas as paginas" })).not.toHaveAttribute(
+      "aria-current",
+    );
+    expect(within(navigation).getByRole("link", { name: "Criar pagina" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    await actor.click(screen.getByRole("button", { name: "Abrir menu" }));
+    const mobileNavigation = screen.getByLabelText("Navegacao mobile");
+    expect(within(mobileNavigation).getByRole("link", { name: "Todas as paginas" })).not.toHaveAttribute(
+      "aria-current",
+    );
+    expect(within(mobileNavigation).getByRole("link", { name: "Criar pagina" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+  });
+
+  it("renders catalog entries as accessible cards without administrative metadata", async () => {
+    mockFetchSequence([visitorResponse, { body: catalogSummaries }]);
+    goTo("/pages");
+    const actor = userEvent.setup();
+
+    render(<App />);
+
+    const card = await screen.findByRole("link", {
+      name: /ao ashi e a longa jornada do futebol de base japones/i,
+    });
+    expect(card).toHaveAttribute("href", "/pages/ao-ashi");
+    expect(within(card).getByRole("img", { name: "Ashito Aoi em campo" })).toHaveAttribute(
+      "src",
+      "https://example.com/ao-ashi-cover.jpg",
+    );
+    expect(within(card).getByText("manga")).toBeInTheDocument();
+    expect(within(card).getByText("futebol")).toBeInTheDocument();
+    expect(within(card).getByText("personagem")).toBeInTheDocument();
+    expect(within(card).queryByText("esperion")).not.toBeInTheDocument();
+    expect(within(card).getByText("…")).toBeInTheDocument();
+    expect(within(card).queryByText("v3")).not.toBeInTheDocument();
+    expect(within(card).queryByText("Pedro Araujo")).not.toBeInTheDocument();
+    expect(within(card).queryAllByRole("link")).toHaveLength(0);
+
+    let attempts = 0;
+    while (document.activeElement !== card && attempts < 20) {
+      await actor.tab();
+      attempts += 1;
+    }
+    expect(card).toHaveFocus();
+  });
+
+  it("uses the brand fallback when a catalog cover is absent or fails to load", async () => {
+    mockFetchSequence([visitorResponse, { body: catalogSummaries }]);
+    goTo("/pages");
+
+    render(<App />);
+
+    const coveredCard = await screen.findByRole("link", {
+      name: /ao ashi e a longa jornada do futebol de base japones/i,
+    });
+    const cover = within(coveredCard).getByRole("img", { name: "Ashito Aoi em campo" });
+    fireEvent.error(cover);
+    expect(coveredCard.querySelector("img")).toHaveAttribute("src", "/brand/favicon-64.png");
+    expect(coveredCard.querySelector("img")).toHaveAttribute("alt", "");
+
+    const noCoverCard = screen.getByRole("link", { name: /^esperion/i });
+    expect(noCoverCard.querySelector("img")).toHaveAttribute("src", "/brand/favicon-64.png");
+    expect(within(noCoverCard).queryByText("…")).not.toBeInTheDocument();
+
+    const unsafeCoverCard = screen.getByRole("link", { name: /^pagina sem keywords/i });
+    expect(unsafeCoverCard.querySelector("img")).toHaveAttribute("src", "/brand/favicon-64.png");
+    expect(within(unsafeCoverCard).queryByLabelText("Keywords")).not.toBeInTheDocument();
+  });
+
   it("searches pages and returns to the full listing when the query is cleared", async () => {
     const fetchMock = mockFetchSequence([
       visitorResponse,
@@ -390,7 +497,7 @@ describe("Wiki-bol frontend", () => {
     expect(await screen.findByRole("link", { name: /ao ashi/i })).toBeInTheDocument();
   });
 
-  it("filters the listing from a keyword URL and keeps keyword chips navigable", async () => {
+  it("filters the listing from a keyword URL and returns to the full listing when cleared", async () => {
     const fetchMock = mockFetchSequence([visitorResponse, { body: [summaries[0]] }, { body: summaries }]);
     const actor = userEvent.setup();
     goTo("/pages?keyword=manga");
@@ -404,7 +511,7 @@ describe("Wiki-bol frontend", () => {
       credentials: "include",
     });
 
-    expect(screen.getAllByRole("link", { name: /^manga$/i })[0]).toHaveAttribute("href", "/pages?keyword=manga");
+    expect(screen.queryByRole("link", { name: /^manga$/i })).not.toBeInTheDocument();
     await actor.clear(screen.getByRole("searchbox", { name: /buscar paginas/i }));
     await actor.click(screen.getByRole("button", { name: /^buscar$/i }));
 
@@ -414,9 +521,14 @@ describe("Wiki-bol frontend", () => {
   });
 
   it("canonicalizes accented keyword chips before navigating to the filtered listing", async () => {
-    const legacyKeywordPage = { ...summaries[0], keywords: ["mangá", "futebol"] };
-    const fetchMock = mockFetchSequence([visitorResponse, { body: [legacyKeywordPage] }, { body: [legacyKeywordPage] }]);
-    goTo("/pages");
+    const legacyKeywordPage = { ...aoAshi, keywords: ["mangá", "futebol"] };
+    const fetchMock = mockFetchSequence([
+      visitorResponse,
+      { body: legacyKeywordPage },
+      { body: aoAshiHistory },
+      { body: [summaries[0]] },
+    ]);
+    goTo("/pages/ao-ashi");
 
     render(<App />);
 
@@ -458,7 +570,7 @@ describe("Wiki-bol frontend", () => {
     expect(screen.getByText("Slug permanente")).toBeInTheDocument();
     expect(screen.getByText("ao-ashi")).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /editar pagina/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /deletar pagina/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /deletar página/i })).not.toBeInTheDocument();
     expect(screen.getByRole("link", { name: /^historico$/i })).toHaveAttribute("href", "/pages/ao-ashi/history");
     expect(screen.getAllByRole("link", { name: /^manga$/i })[0]).toHaveAttribute("href", "/pages?keyword=manga");
   });
@@ -498,7 +610,7 @@ describe("Wiki-bol frontend", () => {
       "href",
       "/pages/ao-ashi/edit",
     );
-    expect(screen.getByRole("button", { name: /deletar pagina/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /deletar página/i })).toBeInTheDocument();
   });
 
   it("renders a dedicated history page with default inline comparison and preview", async () => {
@@ -1009,8 +1121,8 @@ describe("Wiki-bol frontend", () => {
 
     render(<App />);
 
-    await actor.click(await screen.findByRole("button", { name: /deletar pagina/i }));
-    const dialog = screen.getByRole("dialog", { name: /deletar pagina/i });
+    await actor.click(await screen.findByRole("button", { name: /deletar página/i }));
+    const dialog = screen.getByRole("dialog", { name: /deletar página/i });
     expect(within(dialog).getByText(/tem certeza que quer deletar essa página/i)).toBeInTheDocument();
 
     await actor.click(within(dialog).getByRole("button", { name: /confirmar delete/i }));

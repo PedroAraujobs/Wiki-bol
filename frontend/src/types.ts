@@ -19,6 +19,8 @@ export type PageSummary = {
   currentVersion: number;
   authorName: string;
   updatedAt: string;
+  coverImageUrl?: string | null;
+  coverImageAlt?: string | null;
 };
 
 export type PageDetails = {
