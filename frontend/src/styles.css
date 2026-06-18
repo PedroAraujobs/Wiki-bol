@@ -618,6 +618,10 @@ a:focus-visible {
   object-fit: cover;
 }
 
+.result-media img.catalog-fallback-image {
+  object-fit: contain;
+}
+
 .result-content {
   display: flex;
   min-width: 0;
