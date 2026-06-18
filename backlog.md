@@ -9,6 +9,7 @@ Plano detalhado das telas de alta prioridade e direcao visual: [`docs/frontend-s
 - Estrutura inicial do monorepo com `backend/`, `frontend/` e `docs/`.
 - Frontend React + Vite + TypeScript criado.
 - Shell editorial com navegacao lateral, area de sessao no topo, login Google e logout.
+- Secao `Visto recentemente` na sidebar, persistida localmente e separada entre visitante e usuario autenticado.
 - Listagem e busca de paginas com estados de loading, vazio e erro.
 - Leitura de artigo com Markdown, breadcrumbs, tags, acoes contextuais e rodape editorial.
 - Criacao e edicao de paginas com preview Markdown, upload de imagem e slug imutavel na edicao.
@@ -23,14 +24,13 @@ Plano detalhado das telas de alta prioridade e direcao visual: [`docs/frontend-s
   - filtro por keyword usando a busca publica existente.
 - Testes automatizados de frontend para shell, busca, leitura, criacao, edicao, upload, logout e delete.
 - Testes de backend para OAuth redirect, normalizacao de keywords e busca acento-insensivel no endpoint real.
-
-## Alta prioridade atual
-
 - Tela ou painel de historico de versoes:
   - listar versoes;
   - visualizar snapshot de uma versao;
   - restaurar versao quando usuario for autor ou `ADMIN`;
   - destacar que restaurar cria uma nova versao.
+## Alta prioridade atual
+
 - Confirmacoes para acoes destrutivas:
   - modal ou dialogo antes de deletar pagina;
   - explicar que delete e remocao logica;
@@ -46,7 +46,6 @@ Plano detalhado das telas de alta prioridade e direcao visual: [`docs/frontend-s
 - Persistencia local de preferencias simples:
   - ultima busca;
   - modo editor/preview;
-  - pagina recentemente aberta.
 
 ## Baixa prioridade
 
