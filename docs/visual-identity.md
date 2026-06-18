@@ -124,7 +124,7 @@ Artigos ficam limitados a 820px, equivalentes a aproximadamente 68–76 caracter
 
 - Desktop: sidebar sticky de 248px com navegacao e ate cinco paginas vistas recentemente, barra de sessao e conteudo central de ate 1180px.
 - Artigo: breadcrumb, titulo, tags, acoes, corpo de ate 820px e informacoes editoriais ao final.
-- Catalogo: cabecalho, busca compacta e lista editorial unica com divisores.
+- Catalogo: cabecalho, busca compacta, grid de cards no desktop e lista sem imagens no mobile.
 - Manga, personagem, time, partida, autor e arco continuam usando Markdown e keywords. Infoboxes futuras devem ser paineis informativos, nao cards promocionais.
 - Historico: lista de versoes lateral e comparacao principal; em telas estreitas, fluxo unico.
 - Editor: formulario principal, metadados laterais e preview; no mobile, tabs Editor/Preview.
@@ -136,7 +136,7 @@ Artigos ficam limitados a 820px, equivalentes a aproximadamente 68–76 caracter
 | Sidebar | Superficie neutra, 248px, navegacao ativa com marcador lateral e cards compactos para paginas vistas recentemente |
 | Cabecalho | 68px, superficie com divisor inferior, sessao a direita |
 | Busca | Painel de ferramenta com borda, campo flexivel e botao de 42px |
-| Resultados | Uma superficie com linhas separadas; hover altera fundo, nao eleva card |
+| Resultados | Cards com capa e altura estavel no desktop; links compactos sem capa no mobile |
 | Tags | Pills compactas neutras; hover adiciona borda e fundo interativo |
 | Botoes | 42px, raio 6px; primario azul, secundario neutro, destrutivo vermelho sobrio |
 | Breadcrumb | 13–14px, links azuis com sublinhado no hover |
@@ -165,7 +165,7 @@ Artigos ficam limitados a 820px, equivalentes a aproximadamente 68–76 caracter
 
 ## 14. Pagina de catalogo
 
-A barra superior mostra o simbolo apenas em telas compactas e a sessao no lado direito. O cabecalho `Catalogo / Todas as paginas` ocupa uma largura controlada. A busca aparece como ferramenta unica. Resultados formam uma lista branca continua: titulo a esquerda, metadados a direita e keywords abaixo. Hover usa fundo neutro e links recebem sublinhado, sem deslocamento de layout.
+A barra superior mostra o simbolo apenas em telas compactas e a sessao no lado direito. O cabecalho `Catalogo / Todas as paginas` ocupa uma largura controlada. A busca aparece como ferramenta unica. Acima de 700px, resultados formam um grid de cards com capa em proporcao fixa, titulo e ate tres keywords. Ate 700px, a capa e ocultada e os resultados viram uma lista compacta. O card inteiro e um link, sem metadados administrativos ou controles interativos aninhados.
 
 ## 15. Pagina de artigo
 

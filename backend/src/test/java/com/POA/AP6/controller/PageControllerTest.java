@@ -1,5 +1,6 @@
 package com.POA.AP6.controller;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
@@ -64,12 +65,40 @@ class PageControllerTest {
 
 	@Test
 	void listReturnsPublicPages() throws Exception {
-		when(pageService.listActivePages()).thenReturn(List.of(page(user())));
+		Page page = page(user());
+		page.setContent("""
+				# Pagina
+
+				![Primeira capa](https://example.com/first.jpg)
+
+				![Segunda capa](https://example.com/second.jpg)
+				""");
+		when(pageService.listActivePages()).thenReturn(List.of(page));
 
 		mockMvc.perform(get("/api/pages"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].title").value("Pagina teste"))
-				.andExpect(jsonPath("$[0].slug").value("pagina-teste"));
+				.andExpect(jsonPath("$[0].slug").value("pagina-teste"))
+				.andExpect(jsonPath("$[0].coverImageUrl").value("https://example.com/first.jpg"))
+				.andExpect(jsonPath("$[0].coverImageAlt").value("Primeira capa"));
+	}
+
+	@Test
+	void listIgnoresImageSyntaxInsideCodeFence() throws Exception {
+		Page page = page(user());
+		page.setContent("""
+				```markdown
+				![Nao renderizada](https://example.com/code.jpg)
+				```
+
+				![Capa real](https://example.com/real.jpg)
+				""");
+		when(pageService.listActivePages()).thenReturn(List.of(page));
+
+		mockMvc.perform(get("/api/pages"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$[0].coverImageUrl").value("https://example.com/real.jpg"))
+				.andExpect(jsonPath("$[0].coverImageAlt").value("Capa real"));
 	}
 
 	@Test
@@ -79,7 +108,9 @@ class PageControllerTest {
 		mockMvc.perform(get("/api/pages/search").param("q", "spring").param("limit", "10"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$[0].title").value("Pagina teste"))
-				.andExpect(jsonPath("$[0].keywords[0]").value("spring"));
+				.andExpect(jsonPath("$[0].keywords[0]").value("spring"))
+				.andExpect(jsonPath("$[0].coverImageUrl").value(nullValue()))
+				.andExpect(jsonPath("$[0].coverImageAlt").value(nullValue()));
 	}
 
 	@Test
