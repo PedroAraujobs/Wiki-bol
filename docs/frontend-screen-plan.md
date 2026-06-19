@@ -553,7 +553,7 @@ Conteudo
 
 Acoes
 Editar pagina
-Historico em breve
+Historico
 Deletar pagina (apenas autor/admin)
 
 Informacoes editoriais

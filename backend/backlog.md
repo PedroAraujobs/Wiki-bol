@@ -18,6 +18,8 @@ Lista de sugestoes para evolucao do backend. Os itens abaixo nao sao obrigatorio
 - Redirecionamento configuravel para o frontend apos login Google.
 - Suporte a roles `USER` e `ADMIN`, com promocao manual no banco para usuario de teste.
 - Permissao de delete e restauracao restrita ao autor original da pagina ou admin.
+- Endpoint publico de health check para monitoramento do deploy.
+- Navegacao e busca por keywords normalizadas.
 
 ## Alta prioridade
 
@@ -25,7 +27,6 @@ Nenhum item pendente no momento.
 
 ## Media prioridade
 
-- Adicionar navegacao/listagem por tags, categorias ou keywords.
 - Adicionar status de rascunho/publicado.
 - Adicionar auditoria simples de alteracoes alem do historico de conteudo.
 - Criar paginacao para listagem de paginas e historico.
@@ -34,4 +35,3 @@ Nenhum item pendente no momento.
 
 - Adicionar limpeza de imagens orfas no Supabase Storage.
 - Adicionar OpenAPI/Swagger para documentacao interativa.
-- Adicionar endpoint de health check.

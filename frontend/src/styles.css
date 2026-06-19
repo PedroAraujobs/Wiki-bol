@@ -425,8 +425,6 @@ p {
 .screen-header p:not(.eyebrow),
 .muted,
 .status-text,
-.result-meta,
-.article-meta,
 .empty-state p,
 .error-state p {
   color: var(--text-secondary);
@@ -649,14 +647,6 @@ a:focus-visible {
   color: var(--interactive-hover);
   text-decoration: underline;
   text-underline-offset: 3px;
-}
-
-.result-meta,
-.article-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 13px;
-  font-size: 0.8rem;
 }
 
 .catalog-keywords {

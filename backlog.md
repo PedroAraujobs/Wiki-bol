@@ -25,22 +25,16 @@ Plano detalhado das telas de alta prioridade e direcao visual: [`docs/frontend-s
   - filtro por keyword usando a busca publica existente.
 - Testes automatizados de frontend para shell, busca, leitura, criacao, edicao, upload, logout e delete.
 - Testes de backend para OAuth redirect, normalizacao de keywords e busca acento-insensivel no endpoint real.
+- Tratamento centralizado de erros da API, preservando mensagens de `400`, `401`, `403` e `404`.
 - Tela ou painel de historico de versoes:
   - listar versoes;
   - visualizar snapshot de uma versao;
   - restaurar versao quando usuario for autor ou `ADMIN`;
   - destacar que restaurar cria uma nova versao.
+
 ## Alta prioridade atual
 
-- Confirmacoes para acoes destrutivas:
-  - modal ou dialogo antes de deletar pagina;
-  - explicar que delete e remocao logica;
-  - tratar `403` quando usuario nao tem permissao.
-- Tratamento centralizado de erros de API:
-  - `401`: orientar login;
-  - `403`: mostrar falta de permissao;
-  - `404`: pagina nao encontrada;
-  - `400`: mostrar mensagens retornadas pela API.
+Nenhum item pendente no momento.
 
 ## Media prioridade
 
@@ -62,11 +56,3 @@ Plano detalhado das telas de alta prioridade e direcao visual: [`docs/frontend-s
   - nome, email, avatar e role;
   - informacoes de sessao;
   - acao de logout.
-- Tema visual especifico do nicho:
-  - identidade visual da Wiki Bol;
-  - componentes reutilizaveis;
-  - refinamento responsivo.
-- Testes automatizados do frontend:
-  - testes unitarios de componentes principais;
-  - testes de integracao com API mockada;
-  - smoke test do fluxo de leitura/busca.
